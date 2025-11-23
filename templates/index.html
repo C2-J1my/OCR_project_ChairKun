@@ -74,12 +74,26 @@
             <option value="none">None（不处理，原图）</option>
         </select>
 
+        <label for="langSelect">识别语言：</label>
+        <select id="langSelect" name="lang">
+            <option value="chi_sim">中文（简体）</option>
+            <option value="eng">English（英文）</option>
+            <option value="chi_sim+eng">中文+英文</option>
+        </select>
+
         <button type="submit">Submit</button>
     </form>
 
     <div class="loading" id="loading">
         Processing... Please wait.
     </div>
+
+    {% if result_img %}
+        <div class="result">
+            <h2>Processed Image</h2>
+            <img src="{{ result_img }}" alt="Processed image" style="max-width:100%; height:auto; border:1px solid #ccc;" />
+        </div>
+    {% endif %}
 
     {% if text %}
         <div class="result">
@@ -103,16 +117,15 @@
     }
 
     function handleSubmit(e) {
-        // 在提交前把选择的 preset 作为查询参数追加到 action，后端使用 request.args 获取
+        // 在提交前把选择的 preset 和 lang 作为查询参数追加到 action，后端使用 request.args 获取
         const form = document.getElementById('ocrForm');
         const preset = document.getElementById('presetSelect').value;
+        const lang = document.getElementById('langSelect').value;
         let base = form.action.split('?')[0];
-        if (preset && preset !== '') {
-            // 如果用户选择了 none，我们也把它作为 preset 发送，后端会优先读取 preset
-            form.action = base + '?preset=' + encodeURIComponent(preset);
-        } else {
-            form.action = base;
-        }
+        const params = [];
+        if (preset && preset !== '') params.push('preset=' + encodeURIComponent(preset));
+        if (lang && lang !== '') params.push('lang=' + encodeURIComponent(lang));
+        form.action = base + (params.length ? ('?' + params.join('&')) : '');
         showLoading();
         return true; // allow the form to submit
     }

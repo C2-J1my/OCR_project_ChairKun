@@ -3,6 +3,7 @@ import time
 from flask import Flask, request, render_template, jsonify
 import pytesseract
 from PIL import Image
+from pytesseract import Output
 import cv2
 import numpy as np
 from werkzeug.utils import secure_filename
@@ -44,7 +45,7 @@ if not _set_tesseract_cmd():
         "无法找到 Tesseract-OCR。\n"
         "请通过以下方式之一解决：\n"
         "1. 配置环境变量 TESSERACT_CMD 指向你的 tesseract.exe 文件。\n"
-        "   例如: TESSERACT_CMD=D:\Tesseract-OCR\tesseract.exe\n"
+        "   例如: TESSERACT_CMD=D:\\Tesseract-OCR\\tesseract.exe\n"
         "2. 或者，在 _set_tesseract_cmd() 函数的 candidates 列表中添加你的安装路径。"
     )
 
@@ -106,13 +107,38 @@ def ocr():
             text = pytesseract.image_to_string(processed_image, lang='eng', config='--psm 6')
         ocr_end = time.perf_counter()
 
+        # 使用 pytesseract 返回的位置信息绘制绿色矩形框
+        try:
+            data = pytesseract.image_to_data(processed_image, lang=lang, config='--psm 6', output_type=Output.DICT)
+            # 转为 OpenCV BGR 图像以便绘制
+            cv_img = cv2.cvtColor(np.array(processed_image), cv2.COLOR_RGB2BGR)
+            n_boxes = len(data.get('level', []))
+            for i in range(n_boxes):
+                (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+                conf = data.get('conf', [])[i] if 'conf' in data else '-1'
+                txt = data.get('text', [''])[i]
+                try:
+                    c = int(conf)
+                except Exception:
+                    c = -1
+                # 仅对置信度有效且文本非空的位置画框
+                if c > 30 and txt.strip():
+                    cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            static_dir = os.path.join(app.root_path, 'static')
+            os.makedirs(static_dir, exist_ok=True)
+            result_static_path = os.path.join(static_dir, 'result.png')
+            cv2.imwrite(result_static_path, cv_img)
+            result_url = '/static/result.png'
+        except Exception:
+            result_url = None
+
         total_end = time.perf_counter()
         timings = {
             'preprocess': round((pre_end - pre_start) * 1000, 1),
             'ocr': round((ocr_end - ocr_start) * 1000, 1),
             'total': round((total_end - start) * 1000, 1),
         }
-        return render_template('index.html', text=text, timings=timings)
+        return render_template('index.html', text=text, timings=timings, result_img=result_url)
     except Exception as e:
         return render_template('index.html', text=f"识别失败: {str(e)}")
 
@@ -162,6 +188,28 @@ def api_ocr():
     except Exception:
         text = pytesseract.image_to_string(img, lang='eng', config='--psm 6')
     ocr1 = time.perf_counter()
+    # 绘制识别框并保存到 static/result.png
+    try:
+        data = pytesseract.image_to_data(img, lang=lang, config='--psm 6', output_type=Output.DICT)
+        cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        n_boxes = len(data.get('level', []))
+        for i in range(n_boxes):
+            (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+            conf = data.get('conf', [])[i] if 'conf' in data else '-1'
+            txt = data.get('text', [''])[i]
+            try:
+                c = int(conf)
+            except Exception:
+                c = -1
+            if c > 30 and txt.strip():
+                cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        static_dir = os.path.join(app.root_path, 'static')
+        os.makedirs(static_dir, exist_ok=True)
+        result_static_path = os.path.join(static_dir, 'result.png')
+        cv2.imwrite(result_static_path, cv_img)
+        result_url = '/static/result.png'
+    except Exception:
+        result_url = None
     t1 = time.perf_counter()
     return jsonify({
         "text": text,
@@ -171,7 +219,8 @@ def api_ocr():
             "total": round((t1 - t0) * 1000, 1)
         },
         "lang": lang,
-        "preset": preset
+        "preset": preset,
+        "result_img": result_url
     })
 
 @app.route('/health', methods=['GET'])
