@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Application</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 60%;
+            margin: 50px auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>OCR Image Upload</h1>
+    <form action="/ocr" method="POST" enctype="multipart/form-data">
+        <label for="file">Upload an image:</label>
+        <input type="file" name="file" accept="image/*" required>
+        <button type="submit" onclick="showLoading()">Submit</button>
+    </form>
+
+    <div class="loading" id="loading">
+        Processing... Please wait.
+    </div>
+
+    {% if text %}
+        <div class="result">
+            <h2>OCR Result:</h2>
+            <p>{{ text }}</p>
+        </div>
+    {% endif %}
+    {% if timings %}
+        <div class="result">
+            <h2>Timings (ms)</h2>
+            <p>Preprocess: {{ timings.preprocess }}</p>
+            <p>OCR: {{ timings.ocr }}</p>
+            <p>Total: {{ timings.total }}</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    function showLoading() {
+        document.getElementById('loading').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>

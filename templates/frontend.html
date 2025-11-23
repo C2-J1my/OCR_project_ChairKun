@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OCR应用</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-top: 20px; }
+        input[type="file"] { margin: 10px 0; }
+        button { background: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #45a049; }
+        #result { margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 4px; min-height: 100px; }
+    </style>
+</head>
+<body>
+    <h1>OCR文字识别应用</h1>
+    <p>选择一张包含文字的图片，点击"识别文字"按钮，应用将识别图片中的文字。</p>
+    
+    <div class="container">
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="processImage()">识别文字</button>
+        
+        <div id="result">
+            识别结果将显示在这里...
+        </div>
+    </div>
+
+    <script>
+        async function processImage() {
+            const file = document.getElementById('imageInput').files[0];
+            if (!file) {
+                alert('请先选择一张图片');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            try {
+                const response = await fetch('http://localhost:5000/ocr', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('服务器错误: ' + response.status);
+                }
+                
+                const result = await response.json();
+                document.getElementById('result').innerText = result.text;
+            } catch (error) {
+                document.getElementById('result').innerText = '识别失败: ' + error.message;
+                console.error('OCR处理失败:', error);
+            }
+        }
+    </script>
+</body>
+</html>
