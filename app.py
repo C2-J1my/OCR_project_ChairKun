@@ -14,26 +14,39 @@ os.makedirs('uploads', exist_ok=True)
 
 # 设置Tesseract路径（根据你安装的路径进行修改）
 def _set_tesseract_cmd():
+    # 优先从环境变量获取路径
+    tesseract_path = os.environ.get('TESSERACT_CMD')
+    
+    if tesseract_path and os.path.exists(tesseract_path):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        # 自动设置 tessdata 路径
+        os.environ.setdefault('TESSDATA_PREFIX', os.path.join(os.path.dirname(tesseract_path), 'tessdata'))
+        return True
+    
+    # 如果环境变量未设置，可以尝试一些常见路径作为备选
     candidates = [
-        os.environ.get('TESSERACT_CMD'),
-        r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe',
-        r'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe',
-        r'D:\\Program Files\\Tesseract-OCR\\tesseract.exe',
-        r'D:\\Tesseract-OCR\\tesseract.exe',
+        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+        r'D:\Program Files\Tesseract-OCR\tesseract.exe',
+        r'D:\Tesseract-OCR\tesseract.exe',
     ]
-    auto = shutil.which('tesseract')
-    if auto:
-        candidates.insert(0, auto)
+    
     for p in candidates:
-        if p and os.path.exists(p):
+        if os.path.exists(p):
             pytesseract.pytesseract.tesseract_cmd = p
             os.environ.setdefault('TESSDATA_PREFIX', os.path.join(os.path.dirname(p), 'tessdata'))
             return True
+            
     return False
 
 if not _set_tesseract_cmd():
-    pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
-    os.environ.setdefault('TESSDATA_PREFIX', r'C:\\Program Files\\Tesseract-OCR\\tessdata')
+    raise FileNotFoundError(
+        "无法找到 Tesseract-OCR。\n"
+        "请通过以下方式之一解决：\n"
+        "1. 配置环境变量 TESSERACT_CMD 指向你的 tesseract.exe 文件。\n"
+        "   例如: TESSERACT_CMD=D:\Tesseract-OCR\tesseract.exe\n"
+        "2. 或者，在 _set_tesseract_cmd() 函数的 candidates 列表中添加你的安装路径。"
+    )
 
 # 首页路由，返回HTML表单
 @app.route('/')
@@ -47,19 +60,42 @@ def ocr():
     file = request.files.get('file') or request.files.get('image')
     if not file:
         return jsonify({"error": "No file part"})
-    if file.filename == '':
+    raw_filename = file.filename or ''
+    if raw_filename == '':
         return jsonify({"error": "No selected file"})
-    
-    # 保存上传的文件
-    filename = secure_filename(file.filename)
+
+    # 保存上传的文件（确保传入 secure_filename 的是 str）
+    filename = secure_filename(raw_filename)
     filepath = os.path.join('uploads', filename)
     file.save(filepath)
     
     try:
         pre_start = time.perf_counter()
-        mode = request.args.get('mode', 'auto')
-        preprocessor = ImagePreprocessor()
-        processed_image = preprocessor.process(filepath, mode=mode)
+        # 仅使用 preset 参数（取代原有的 mode），preset 可为 'light'|'heavy'|'none' 或留空
+        preset = request.args.get('preset')
+        if preset in ('light', 'heavy'):
+            preprocessor = ImagePreprocessor.from_preset(preset)
+        else:
+            preprocessor = ImagePreprocessor()
+
+        # 如果用户选择 preset == 'none'，则跳过预处理并直接返回 RGB 图像
+        process_mode = 'none' if preset == 'none' else None
+        processed_image = preprocessor.process(filepath, mode=process_mode)
+
+
+        # 保存处理后准备识别的图片到 process/result.png
+        os.makedirs('process', exist_ok=True)
+        result_path = os.path.join('process', 'result.png')
+        try:
+            processed_image.save(result_path)
+        except Exception:
+            # processed_image 可能不是 PIL.Image（保险起见），尝试转换
+            try:
+                Image.fromarray(processed_image).save(result_path)
+            except Exception:
+                pass
+
+
         pre_end = time.perf_counter()
 
         ocr_start = time.perf_counter()
@@ -86,13 +122,39 @@ def api_ocr():
     file = request.files.get('file') or request.files.get('image')
     if not file:
         return jsonify({"error": "No file uploaded"}), 400
-    filename = secure_filename(file.filename)
+
+    raw_filename = file.filename or ''
+    if raw_filename == '':
+        return jsonify({"error": "No file uploaded"}), 400
+
+    filename = secure_filename(raw_filename)
     path = os.path.join('uploads', filename)
     file.save(path)
-    mode = request.args.get('mode', 'auto')
+    # 仅使用 preset 参数（取代原有的 mode）
+    preset = request.args.get('preset')
     lang = request.args.get('lang', 'chi_sim')
+    if preset in ('light', 'heavy'):
+        preproc = ImagePreprocessor.from_preset(preset)
+    else:
+        preproc = ImagePreprocessor()
+
     pre0 = time.perf_counter()
-    img = ImagePreprocessor().process(path, mode=mode)
+    process_mode = 'none' if preset == 'none' else None
+    img = preproc.process(path, mode=process_mode)
+
+
+    # 保存处理后准备识别的图片到 process/result.png
+    os.makedirs('process', exist_ok=True)
+    result_path = os.path.join('process', 'result.png')
+    try:
+        img.save(result_path)
+    except Exception:
+        try:
+            Image.fromarray(img).save(result_path)
+        except Exception:
+            pass
+
+
     pre1 = time.perf_counter()
     ocr0 = time.perf_counter()
     try:
@@ -109,7 +171,7 @@ def api_ocr():
             "total": round((t1 - t0) * 1000, 1)
         },
         "lang": lang,
-        "mode": mode
+        "preset": preset
     })
 
 @app.route('/health', methods=['GET'])

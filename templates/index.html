@@ -62,10 +62,19 @@
 
 <div class="container">
     <h1>OCR Image Upload</h1>
-    <form action="/ocr" method="POST" enctype="multipart/form-data">
+    <form id="ocrForm" action="/ocr" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit(event)">
         <label for="file">Upload an image:</label>
         <input type="file" name="file" accept="image/*" required>
-        <button type="submit" onclick="showLoading()">Submit</button>
+
+        <label for="presetSelect">预处理策略 / 模式：</label>
+        <select id="presetSelect" name="preset">
+            <option value="">Auto (默认)</option>
+            <option value="light">Light（轻处理）</option>
+            <option value="heavy">Heavy（重处理）</option>
+            <option value="none">None（不处理，原图）</option>
+        </select>
+
+        <button type="submit">Submit</button>
     </form>
 
     <div class="loading" id="loading">
@@ -91,6 +100,21 @@
 <script>
     function showLoading() {
         document.getElementById('loading').style.display = 'block';
+    }
+
+    function handleSubmit(e) {
+        // 在提交前把选择的 preset 作为查询参数追加到 action，后端使用 request.args 获取
+        const form = document.getElementById('ocrForm');
+        const preset = document.getElementById('presetSelect').value;
+        let base = form.action.split('?')[0];
+        if (preset && preset !== '') {
+            // 如果用户选择了 none，我们也把它作为 preset 发送，后端会优先读取 preset
+            form.action = base + '?preset=' + encodeURIComponent(preset);
+        } else {
+            form.action = base;
+        }
+        showLoading();
+        return true; // allow the form to submit
     }
 </script>
 
