@@ -36,7 +36,7 @@ class ImagePreprocessor:
         self.clip_limit = clip_limit
         self.tile_grid_size = tile_grid_size
         self.denoise_method = denoise_method
-        self.denoise_params = denoise_params or (7, 50, 50)
+        self.denoise_params = denoise_params or (7, 75, 75)
         self.thresh_blocksize = thresh_blocksize
         self.thresh_C = thresh_C
         self.sharpen = sharpen
@@ -50,7 +50,7 @@ class ImagePreprocessor:
                 clip_limit=1.5,
                 tile_grid_size=(8, 8),
                 denoise_method='gassian',
-                denoise_params=(5, 25, 25),
+                denoise_params=(7, 50, 50),
                 thresh_blocksize=11,
                 thresh_C=2,
                 sharpen=False,
@@ -61,7 +61,7 @@ class ImagePreprocessor:
                 clip_limit=3.0,
                 tile_grid_size=(8, 8),
                 denoise_method='bilateral',
-                denoise_params=(9, 75, 75),
+                denoise_params=(7, 100, 100),
                 thresh_blocksize=15,
                 thresh_C=4,
                 sharpen=True,
@@ -118,11 +118,11 @@ class ImagePreprocessor:
 
 if __name__ == "__main__":
     # 使用示例
-    input_path = "test_image/1.png"
-    output_path = "process/result_enhanced1.png"
+    input_path = "test_image/8.png"
+    output_path = "process/result.png"
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
     try:
-        enhanced_path = enhance_image(input_path, output_path, 'light')
+        enhanced_path = enhance_image(input_path, output_path, 'auto')
         print(f"图像已增强并保存至: {enhanced_path}")
         print("请使用此增强后的图像进行OCR识别")
     except Exception as e:
