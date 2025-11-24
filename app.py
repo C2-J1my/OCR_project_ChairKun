@@ -9,6 +9,7 @@ import numpy as np
 from werkzeug.utils import secure_filename
 import shutil
 from image_preprocessor import ImagePreprocessor
+import uuid
 
 app = Flask(__name__)
 os.makedirs('uploads', exist_ok=True)
@@ -80,21 +81,24 @@ def ocr():
             preprocessor = ImagePreprocessor()
 
         # 如果用户选择 preset == 'none'，则跳过预处理并直接返回 RGB 图像
-        process_mode = 'none' if preset == 'none' else None
+        # 支持前端已做部分预处理的标记：当前端先做了灰度+对比度增强，会提交 client_pre=1
+        client_pre = request.args.get('client_pre') or request.args.get('client')
+        client_pre = True if str(client_pre).lower() in ('1','true','yes') else False
+        process_mode = 'none' if preset == 'none' else ('client' if client_pre else None)
         processed_image = preprocessor.process(filepath, mode=process_mode)
 
 
-        # 保存处理后准备识别的图片到 process/result.png
-        os.makedirs('process', exist_ok=True)
-        result_path = os.path.join('process', 'result.png')
-        try:
-            processed_image.save(result_path)
-        except Exception:
-            # processed_image 可能不是 PIL.Image（保险起见），尝试转换
-            try:
-                Image.fromarray(processed_image).save(result_path)
-            except Exception:
-                pass
+        # # 保存处理后准备识别的图片到 process/result.png
+        # os.makedirs('process', exist_ok=True)
+        # result_path = os.path.join('process', 'result.png')
+        # try:
+        #     processed_image.save(result_path)
+        # except Exception:
+        #     # processed_image 可能不是 PIL.Image（保险起见），尝试转换
+        #     try:
+        #         Image.fromarray(processed_image).save(result_path)
+        #     except Exception:
+        #         pass
 
 
         pre_end = time.perf_counter()
@@ -107,11 +111,12 @@ def ocr():
             text = pytesseract.image_to_string(processed_image, lang='eng', config='--psm 6')
         ocr_end = time.perf_counter()
 
-        # 使用 pytesseract 返回的位置信息绘制绿色矩形框
+        # 使用 pytesseract 返回的位置信息绘制绿色矩形框并收集 boxes
         try:
             data = pytesseract.image_to_data(processed_image, lang=lang, config='--psm 6', output_type=Output.DICT)
             # 转为 OpenCV BGR 图像以便绘制
             cv_img = cv2.cvtColor(np.array(processed_image), cv2.COLOR_RGB2BGR)
+            boxes = []
             n_boxes = len(data.get('level', []))
             for i in range(n_boxes):
                 (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
@@ -121,15 +126,25 @@ def ocr():
                     c = int(conf)
                 except Exception:
                     c = -1
+                level = data.get('level', [None])[i]
+                boxes.append({
+                    'text': txt,
+                    'left': int(x), 'top': int(y), 'width': int(w), 'height': int(h),
+                    'conf': conf,
+                    'level': level
+                })
                 # 仅对置信度有效且文本非空的位置画框
                 if c > 30 and txt.strip():
                     cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
             static_dir = os.path.join(app.root_path, 'static')
-            os.makedirs(static_dir, exist_ok=True)
-            result_static_path = os.path.join(static_dir, 'result.png')
+            results_dir = os.path.join(static_dir, 'results')
+            os.makedirs(results_dir, exist_ok=True)
+            unique = f"result_{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}.png"
+            result_static_path = os.path.join(results_dir, unique)
             cv2.imwrite(result_static_path, cv_img)
-            result_url = '/static/result.png'
+            result_url = f'/static/results/{unique}'
         except Exception:
+            boxes = []
             result_url = None
 
         total_end = time.perf_counter()
@@ -138,7 +153,7 @@ def ocr():
             'ocr': round((ocr_end - ocr_start) * 1000, 1),
             'total': round((total_end - start) * 1000, 1),
         }
-        return render_template('index.html', text=text, timings=timings, result_img=result_url)
+        return render_template('index.html', text=text, timings=timings, result_img=result_url, boxes=boxes)
     except Exception as e:
         return render_template('index.html', text=f"识别失败: {str(e)}")
 
@@ -165,20 +180,22 @@ def api_ocr():
         preproc = ImagePreprocessor()
 
     pre0 = time.perf_counter()
-    process_mode = 'none' if preset == 'none' else None
+    client_pre = request.args.get('client_pre') or request.args.get('client')
+    client_pre = True if str(client_pre).lower() in ('1','true','yes') else False
+    process_mode = 'none' if preset == 'none' else ('client' if client_pre else None)
     img = preproc.process(path, mode=process_mode)
 
 
-    # 保存处理后准备识别的图片到 process/result.png
-    os.makedirs('process', exist_ok=True)
-    result_path = os.path.join('process', 'result.png')
-    try:
-        img.save(result_path)
-    except Exception:
-        try:
-            Image.fromarray(img).save(result_path)
-        except Exception:
-            pass
+    # # 保存处理后准备识别的图片到 process/result.png
+    # os.makedirs('process', exist_ok=True)
+    # result_path = os.path.join('process', 'result.png')
+    # try:
+    #     img.save(result_path)
+    # except Exception:
+    #     try:
+    #         Image.fromarray(img).save(result_path)
+    #     except Exception:
+    #         pass
 
 
     pre1 = time.perf_counter()
@@ -188,10 +205,11 @@ def api_ocr():
     except Exception:
         text = pytesseract.image_to_string(img, lang='eng', config='--psm 6')
     ocr1 = time.perf_counter()
-    # 绘制识别框并保存到 static/result.png
+    # 绘制识别框并保存到 static/results/<unique>.png，同时构建 boxes
     try:
         data = pytesseract.image_to_data(img, lang=lang, config='--psm 6', output_type=Output.DICT)
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        boxes = []
         n_boxes = len(data.get('level', []))
         for i in range(n_boxes):
             (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
@@ -201,18 +219,29 @@ def api_ocr():
                 c = int(conf)
             except Exception:
                 c = -1
+            level = data.get('level', [None])[i]
+            boxes.append({
+                'text': txt,
+                'left': int(x), 'top': int(y), 'width': int(w), 'height': int(h),
+                'conf': conf,
+                'level': level
+            })
             if c > 30 and txt.strip():
                 cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
         static_dir = os.path.join(app.root_path, 'static')
-        os.makedirs(static_dir, exist_ok=True)
-        result_static_path = os.path.join(static_dir, 'result.png')
+        results_dir = os.path.join(static_dir, 'results')
+        os.makedirs(results_dir, exist_ok=True)
+        unique = f"result_{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}.png"
+        result_static_path = os.path.join(results_dir, unique)
         cv2.imwrite(result_static_path, cv_img)
-        result_url = '/static/result.png'
+        result_url = f'/static/results/{unique}'
     except Exception:
+        boxes = []
         result_url = None
     t1 = time.perf_counter()
     return jsonify({
         "text": text,
+        "boxes": boxes,
         "timings_ms": {
             "preprocess": round((pre1 - pre0) * 1000, 1),
             "ocr": round((ocr1 - ocr0) * 1000, 1),
@@ -239,6 +268,43 @@ def health():
         "languages": langs,
         "status": "ok" if ver else "error"
     })
+
+
+@app.route('/api/delete_results', methods=['POST'])
+def delete_results():
+    """安全地删除位于 static/results 目录下的文件。请求体 JSON: {"files": ["/static/results/xxx.png", ...]}"""
+    try:
+        data = request.get_json() or {}
+        files = data.get('files', []) if isinstance(data, dict) else []
+        if not isinstance(files, list):
+            return jsonify({'error': 'files must be a list'}), 400
+
+        static_dir = os.path.join(app.root_path, 'static')
+        results_dir = os.path.join(static_dir, 'results')
+        deleted = []
+        failed = []
+        for f in files:
+            if not f:
+                continue
+            # accept either '/static/results/xxx' or 'static/results/xxx' or just the basename
+            fname = os.path.basename(f)
+            # simple safety: no path separators allowed in basename
+            if '..' in fname or '/' in fname or '\\' in fname:
+                failed.append({'file': f, 'reason': 'invalid name'})
+                continue
+            target = os.path.join(results_dir, fname)
+            try:
+                if os.path.exists(target) and os.path.commonpath([os.path.abspath(target), os.path.abspath(results_dir)]) == os.path.abspath(results_dir):
+                    os.remove(target)
+                    deleted.append(f)
+                else:
+                    failed.append({'file': f, 'reason': 'not_found'})
+            except Exception as ex:
+                failed.append({'file': f, 'reason': str(ex)})
+
+        return jsonify({'deleted': deleted, 'failed': failed})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

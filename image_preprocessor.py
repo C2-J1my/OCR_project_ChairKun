@@ -84,10 +84,15 @@ class ImagePreprocessor:
         if mode == 'none':
             return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-        # 转换为灰度并增强对比度
+        # 转换为灰度
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
-        enhanced = clahe.apply(gray)
+        # 如果前端已执行灰度与对比度增强（mode == 'client'），则跳过本地 CLAHE
+        if mode == 'client':
+            enhanced = gray
+        else:
+            # 增强对比度（CLAHE）
+            clahe = cv2.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
+            enhanced = clahe.apply(gray)
 
         # 去噪
         denoised = enhanced

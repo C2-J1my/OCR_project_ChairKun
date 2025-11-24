@@ -5,57 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCR Application</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            width: 60%;
-            margin: 50px auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        input[type="file"] {
-            margin: 20px 0;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            border-radius: 5px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            font-size: 18px;
-            color: #4CAF50;
-        }
+        :root{--accent:#4CAF50;--muted:#888}
+        html,body{height:100%;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f4f4f9}
+        .container{max-width:1000px;width:94%;margin:28px auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+        h1{text-align:center;color:#222;margin:6px 0 18px}
+        form{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center}
+        .upload-col{flex:1 1 320px;min-width:260px}
+        .controls-col{flex:1 1 300px;min-width:240px}
+        label{display:block;margin:8px 0;font-weight:600}
+        input[type=file]{display:block}
+        select,input[type=checkbox]{margin:6px 0}
+        button{background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;border:none;font-weight:600;cursor:pointer}
+        button:active{transform:translateY(1px)}
+        .result{margin-top:18px;padding:14px;background:#fbfbfb;border:1px solid #eee;border-radius:8px}
+        .loading{display:none;text-align:center;font-size:16px;color:var(--accent)}
+        .preview{border:1px dashed #ddd;padding:8px;border-radius:6px;background:#fafafa}
+        canvas{max-width:100%;height:auto;border-radius:4px;display:block}
+        /* 2x2 grid layout for main results area */
+        .grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:12px;align-items:start}
+        .grid .cell{min-height:120px}
+        .meta{font-size:13px;color:var(--muted);margin-top:6px}
+        .timings{display:flex;flex-wrap:wrap;gap:10px}
+        .timings .tile{background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #eee;min-width:140px}
+        .error{color:#b00020;background:#ffecec;padding:8px;border-radius:6px;border:1px solid #f5c6cb;margin-top:10px}
+        @media(max-width:720px){.container{width:96%;padding:12px}.timings{flex-direction:column}}
     </style>
 </head>
 <body>
@@ -63,72 +36,710 @@
 <div class="container">
     <h1>OCR Image Upload</h1>
     <form id="ocrForm" action="/ocr" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit(event)">
-        <label for="file">Upload an image:</label>
-        <input type="file" name="file" accept="image/*" required>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+            <div style="flex:1 1 420px;min-width:260px">
+                <label for="file">上传图片（支持 JPG/PNG，支持拖放 & 批量，最大预览宽度 800px）：</label>
+                <div id="dropZone" style="border:1px dashed #ccc;padding:10px;border-radius:6px;background:#fff;">
+                    <input id="fileInput" type="file" name="file" accept="image/*" multiple style="display:block;margin-bottom:8px">
+                    <div style="font-size:13px;color:var(--muted)">或将图片拖拽到此处 (最多一次选择多张)</div>
+                </div>
+                <div class="meta" id="fileMeta">未选择文件</div>
+                <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                    <!-- 批量上传已整合到主提交按钮；保留占位用于未来扩展 -->
+                </div>
+                <div id="multiNotice" style="color:#b06;display:none;font-size:13px;margin-top:6px">多文件上传将跳过前端预处理</div>
+            </div>
 
-        <label for="presetSelect">预处理策略 / 模式：</label>
-        <select id="presetSelect" name="preset">
-            <option value="">Auto (默认)</option>
-            <option value="light">Light（轻处理）</option>
-            <option value="heavy">Heavy（重处理）</option>
-            <option value="none">None（不处理，原图）</option>
-        </select>
-
-        <label for="langSelect">识别语言：</label>
-        <select id="langSelect" name="lang">
-            <option value="chi_sim">中文（简体）</option>
-            <option value="eng">English（英文）</option>
-            <option value="chi_sim+eng">中文+英文</option>
-        </select>
-
-        <button type="submit">Submit</button>
+            <div style="flex:1 1 320px;min-width:260px">
+                <label>选项</label>
+                <div style="margin-top:6px">
+                    <label style="display:block"><input id="frontendToggle" type="checkbox" checked> 启用前端预处理 (S1)</label>
+                </div>
+                <div style="margin-top:10px">
+                    <label>预处理策略：</label>
+                    <select id="presetSelect" name="preset">
+                        <option value="">Auto (默认)</option>
+                        <option value="light">Light（轻处理）</option>
+                        <option value="heavy">Heavy（重处理）</option>
+                        <option value="none">None（不处理，原图）</option>
+                    </select>
+                </div>
+                <div style="margin-top:8px">
+                    <label>识别语言：</label>
+                    <select id="langSelect" name="lang">
+                        <option value="chi_sim">中文（简体）</option>
+                        <option value="eng">English（英文）</option>
+                        <option value="chi_sim+eng">中文+英文</option>
+                    </select>
+                </div>
+                <div style="margin-top:12px">
+                    <button id="submitBtn" type="submit">上传并识别</button>
+                    <button id="resetBtn" type="button" style="margin-left:8px;background:#eee;color:#333" onclick="resetPreview()">重置</button>
+                </div>
+            </div>
+        </div>
     </form>
 
-    <div class="loading" id="loading">
-        Processing... Please wait.
+    <!-- Grid 2x2: TL original preview, TR processed image, BL thumbnails, BR interactive text -->
+    <div class="middle grid" style="margin-top:16px">
+        <div id="cell-original" class="cell">
+            <div class="result">
+                <h3>原始图片预览</h3>
+                <div class="preview">
+                    <img id="originalImg" src="" alt="Original preview" style="max-width:100%;height:auto;display:block;border-radius:4px" />
+                    <canvas id="previewCanvas" width="640" height="360" style="display:none; border-radius:4px; margin-top:6px"></canvas>
+                </div>
+                <div class="meta" id="previewMeta">预处理耗时: <span id="feTime">-</span> ms ｜ 处理后尺寸: <span id="feSize">-</span></div>
+            </div>
+        </div>
+
+        <div id="cell-processed" class="cell">
+            <div class="result" id="resultBlock" style="display: none;">
+                <h3>识别后图片</h3>
+                <div style="position:relative;display:inline-block;max-width:100%">
+                    <img id="resultStaticImg" src="{{ result_img or '' }}" data-boxes='{{ boxes|tojson|safe if boxes else "[]" }}' alt="Processed image" style="max-width:100%; height:auto; border:1px solid #ccc; display:block;" />
+                    <div id="overlay" style="position:absolute;left:0;top:0;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="cell-thumbs" class="cell">
+            <div class="result">
+                <h3>结果缩略图</h3>
+                <div id="resultList" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+        </div>
+
+        <div id="cell-text" class="cell">
+            <div class="result" id="resultTextBlock" style="display:none">
+                <h3>可交互的识别文本（点击高亮对应图片区域）</h3>
+                <div id="resultText" style="padding:8px;background:#fff;border:1px solid #eee;border-radius:6px;min-height:60px;white-space:pre-wrap;word-wrap:break-word"></div>
+            </div>
+        </div>
     </div>
 
-    {% if result_img %}
-        <div class="result">
-            <h2>Processed Image</h2>
-            <img src="{{ result_img }}" alt="Processed image" style="max-width:100%; height:auto; border:1px solid #ccc;" />
-        </div>
-    {% endif %}
+    <div class="loading" id="loading">
+        <svg width="36" height="36" viewBox="0 0 50 50" style="vertical-align:middle">
+            <circle cx="25" cy="25" r="20" stroke="#eee" stroke-width="5" fill="none"></circle>
+            <path d="M45 25a20 20 0 0 1-20 20" stroke="var(--accent)" stroke-width="5" fill="none" stroke-linecap="round">
+                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.9s" repeatCount="indefinite"/>
+            </path>
+        </svg>
+        <span style="margin-left:8px;vertical-align:middle">Processing... Please wait.</span>
+    </div>
+
+    <div id="errors" class="error" style="display:none"></div>
+
+    
 
     {% if text %}
         <div class="result">
             <h2>OCR Result:</h2>
-            <p>{{ text }}</p>
+            <pre style="white-space:pre-wrap;word-wrap:break-word">{{ text }}</pre>
         </div>
     {% endif %}
-    {% if timings %}
-        <div class="result">
-            <h2>Timings (ms)</h2>
-            <p>Preprocess: {{ timings.preprocess }}</p>
-            <p>OCR: {{ timings.ocr }}</p>
-            <p>Total: {{ timings.total }}</p>
+
+    <div class="result">
+        <h2>Timings (ms)</h2>
+        <div class="timings">
+            <div class="tile">前端预处理: <strong id="frontend_ms">-</strong></div>
+            <div class="tile">后端预处理: <strong id="backend_pre_ms">{{ timings.preprocess if timings else '-' }}</strong></div>
+            <div class="tile">OCR 识别: <strong id="backend_ocr_ms">{{ timings.ocr if timings else '-' }}</strong></div>
+            <div class="tile">总耗时（前端+后端）: <strong id="total_ms">-</strong></div>
         </div>
-    {% endif %}
+    </div>
+    
+    <div class="result" id="historyBlock">
+        <h2>历史记录</h2>
+        <div id="historyList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
 </div>
 
 <script>
-    function showLoading() {
-        document.getElementById('loading').style.display = 'block';
+    // Helper: read file into Image object
+    const MAX_WIDTH = 800;
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('previewCanvas');
+    const ctx = canvas.getContext('2d');
+    const originalImg = document.getElementById('originalImg');
+    const feTimeEl = document.getElementById('feTime');
+    const feSizeEl = document.getElementById('feSize');
+    const fileMeta = document.getElementById('fileMeta');
+    const multiNotice = document.getElementById('multiNotice');
+    const loadingEl = document.getElementById('loading');
+    const errorsEl = document.getElementById('errors');
+
+    let lastFileName = null;
+    let batchAbort = false;
+
+    function showLoading() { loadingEl.style.display = 'flex'; }
+    function hideLoading() { loadingEl.style.display = 'none'; }
+
+    function resetPreview(){
+        // clear canvas preview
+        try{ ctx.clearRect(0,0,canvas.width,canvas.height); }catch(e){}
+        if(originalImg){ originalImg.src = ''; originalImg.style.display = 'none'; }
+        if(canvas){ canvas.style.display = 'none'; }
+        // reset file input & meta
+        fileMeta.textContent = '未选择文件';
+        feTimeEl.textContent = '-';
+        feSizeEl.textContent = '-';
+        errorsEl.style.display = 'none';
+        try{ fileInput.value = ''; }catch(e){}
+
+        // hide and clear processed result image and overlay
+        const resultBlock = document.getElementById('resultBlock');
+        const resultTextBlock = document.getElementById('resultTextBlock');
+        const resultList = document.getElementById('resultList');
+        const resultImg = document.getElementById('resultStaticImg');
+        const overlay = document.getElementById('overlay');
+        const resultText = document.getElementById('resultText');
+        if(resultBlock){ resultBlock.style.display = 'none'; }
+        if(resultTextBlock){ resultTextBlock.style.display = 'none'; }
+        if(resultList){ resultList.innerHTML = ''; }
+        if(resultImg){ resultImg.src = ''; resultImg.removeAttribute('data-boxes'); }
+        if(overlay){ overlay.innerHTML = ''; }
+        if(resultText){ resultText.innerHTML = ''; }
+        if(multiNotice){ multiNotice.style.display = 'none'; }
+
+        // reset timing displays
+        const fm = document.getElementById('frontend_ms'); if(fm) fm.textContent='-';
+        const bpm = document.getElementById('backend_pre_ms'); if(bpm) bpm.textContent='-';
+        const bom = document.getElementById('backend_ocr_ms'); if(bom) bom.textContent='-';
+        const tm = document.getElementById('total_ms'); if(tm) tm.textContent='-';
     }
 
-    function handleSubmit(e) {
-        // 在提交前把选择的 preset 和 lang 作为查询参数追加到 action，后端使用 request.args 获取
+    fileInput.addEventListener('change', async function(){
+        errorsEl.style.display = 'none';
+        const f = this.files && this.files[0];
+        if(!f) { resetPreview(); return; }
+        // single-preview use first file; show original image (no frontend processing yet)
+        lastFileName = f.name;
+        fileMeta.textContent = `${f.name} — ${(f.size/1024).toFixed(1)} KB`;
+        const img = await loadImageFromFile(f);
+        // show original image at its natural size constrained by container
+        // assign with onerror handler to show failures
+        if(originalImg){
+            originalImg.onerror = ()=>{
+                errorsEl.textContent = '无法显示预览图片'; errorsEl.style.display='block';
+            };
+            originalImg.src = img.src;
+            originalImg.style.display = 'block';
+        }
+        // prepare canvas dimensions for potential frontend processing (scale to MAX_WIDTH)
+        const scale = Math.min(1, MAX_WIDTH / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        canvas.width = w; canvas.height = h;
+        // keep canvas hidden until preprocessing runs
+        canvas.style.display = 'none';
+        feSizeEl.textContent = `${img.width}x${img.height}`;
+        feTimeEl.textContent = '-';
+        // show multi-file notice if multiple files selected
+        try{ if(this.files && this.files.length>1){ if(multiNotice) multiNotice.style.display='block'; } else { if(multiNotice) multiNotice.style.display='none'; } }catch(e){}
+    });
+
+    // drag & drop support
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropZone.style.borderColor='#1976d2'; });
+    dropZone.addEventListener('dragleave', (e)=>{ e.preventDefault(); dropZone.style.borderColor='#ccc'; });
+    dropZone.addEventListener('drop', async (e)=>{
+        e.preventDefault(); dropZone.style.borderColor='#ccc';
+        const dt = e.dataTransfer;
+        if(!dt) return;
+        const files = Array.from(dt.files).filter(f=>f.type.startsWith('image/'));
+        if(files.length===0) return;
+        // set FileList on input (best-effort)
+        try{
+            const dataTransfer = new DataTransfer();
+            files.forEach(f=>dataTransfer.items.add(f));
+            fileInput.files = dataTransfer.files;
+        }catch(e){ console.warn('无法设置 FileList', e); }
+        // preview first
+        const first = files[0];
+        lastFileName = first.name;
+        fileMeta.textContent = `${files.length} 张图片已选择 (第一张 ${first.name})`;
+        const img = await loadImageFromFile(first);
+        if(originalImg){
+            originalImg.onerror = ()=>{ errorsEl.textContent = '无法显示预览图片'; errorsEl.style.display='block'; };
+            originalImg.src = img.src;
+            originalImg.style.display = 'block';
+        }
+        const scale = Math.min(1, MAX_WIDTH / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        canvas.width = w; canvas.height = h;
+        canvas.style.display = 'none';
+        feSizeEl.textContent = `${img.width}x${img.height}`;
+        feTimeEl.textContent = '-';
+        if(files.length>1 && multiNotice){ multiNotice.style.display='block'; } else if(multiNotice){ multiNotice.style.display='none'; }
+    });
+
+    // Batch upload flow: bindings are guarded because buttons may be removed when UI is merged
+    const batchStartBtnEl = document.getElementById('batchStartBtn');
+    if(batchStartBtnEl){
+        batchStartBtnEl.addEventListener('click', ()=>{
+            const files = Array.from(fileInput.files || []);
+            if(files.length===0){ errorsEl.textContent='请先选择或拖入图片进行批量上传'; errorsEl.style.display='block'; return; }
+            batchAbort = false;
+            const stopEl = document.getElementById('batchStopBtn'); if(stopEl) stopEl.style.display = 'inline-block';
+            batchStartBtnEl.style.display = 'none';
+            const preset = document.getElementById('presetSelect').value;
+            const lang = document.getElementById('langSelect').value;
+            batchUploadFiles(files, preset, lang);
+        });
+    }
+    const batchStopBtnEl = document.getElementById('batchStopBtn');
+    if(batchStopBtnEl){
+        batchStopBtnEl.addEventListener('click', ()=>{
+            batchAbort = true;
+            batchStopBtnEl.style.display = 'none';
+            const startEl = document.getElementById('batchStartBtn'); if(startEl) startEl.style.display = 'inline-block';
+        });
+    }
+
+    function createBatchItem(file){
+        const id = 'batch_' + Math.random().toString(36).slice(2,9);
+        const wrap = document.createElement('div');
+        wrap.style.display='flex'; wrap.style.gap='8px'; wrap.style.alignItems='center'; wrap.style.border='1px solid #eee'; wrap.style.padding='8px'; wrap.style.borderRadius='6px';
+        const thumb = document.createElement('img'); thumb.style.width='84px'; thumb.style.height='56px'; thumb.style.objectFit='cover'; thumb.style.borderRadius='4px'; thumb.src='';
+        const info = document.createElement('div'); info.style.flex='1';
+        const title = document.createElement('div'); title.textContent = file.name; title.style.fontSize='13px'; title.style.fontWeight='600';
+        const status = document.createElement('div'); status.textContent='等待上传'; status.style.fontSize='12px'; status.style.color='var(--muted)';
+        const progressBar = document.createElement('div'); progressBar.style.height='8px'; progressBar.style.background='#f1f1f1'; progressBar.style.borderRadius='4px'; progressBar.style.marginTop='6px';
+        const progressInner = document.createElement('div'); progressInner.style.height='100%'; progressInner.style.width='0%'; progressInner.style.background='linear-gradient(90deg, #4caf50, #1976d2)'; progressInner.style.borderRadius='4px';
+        progressBar.appendChild(progressInner);
+        info.appendChild(title); info.appendChild(status); info.appendChild(progressBar);
+        const resultBox = document.createElement('div'); resultBox.style.minWidth='120px'; resultBox.style.textAlign='right';
+        wrap.appendChild(thumb); wrap.appendChild(info); wrap.appendChild(resultBox);
+        wrap.style.cursor = 'default';
+        // generate thumb
+        const reader = new FileReader(); reader.onload = (ev)=>{ thumb.src = ev.target.result; }; reader.readAsDataURL(file);
+        return {wrap, status, progressInner, resultBox, thumb};
+    }
+
+    async function batchUploadFiles(files, preset, lang){
+        const listEl = document.getElementById('resultList');
+        listEl.innerHTML = '';
+        const results = [];
+        for(let i=0;i<files.length;i++){
+            if(batchAbort) break;
+            const f = files[i];
+            const item = createBatchItem(f);
+            // append a thumbnail-only entry to the result list
+            const thumbWrap = document.createElement('div');
+            thumbWrap.style.width = '100%'; thumbWrap.style.height = '80px'; thumbWrap.style.overflow='hidden'; thumbWrap.style.border='1px solid #eee'; thumbWrap.style.borderRadius='6px'; thumbWrap.style.display='flex'; thumbWrap.style.alignItems='center'; thumbWrap.style.justifyContent='center'; thumbWrap.style.cursor='default';
+            // ensure thumb styling
+            item.thumb.style.width = '100%'; item.thumb.style.height = '100%'; item.thumb.style.objectFit = 'cover'; item.thumb.style.borderRadius = '4px';
+            thumbWrap.appendChild(item.thumb);
+            listEl.appendChild(thumbWrap);
+            item.status.textContent = '上传中...';
+            try{
+                const res = await uploadFileToApi(f, preset, lang, (pct)=>{ item.progressInner.style.width = pct + '%'; });
+                item.status.textContent = '完成';
+                // show small text snippet
+                const txt = document.createElement('div'); txt.style.fontSize='12px'; txt.style.marginTop='6px'; txt.textContent = (res.text||'').slice(0,120);
+                item.resultBox.appendChild(txt);
+                // store result on the item and make thumbnail clickable to view full result
+                item.result = res;
+                thumbWrap.style.cursor = 'pointer';
+                thumbWrap.onclick = ()=>{ displayApiResult(res, 0, f); window.scrollTo({top:0,behavior:'smooth'}); };
+                // save to history
+                pushHistory(res, f, 0);
+                results.push(res);
+            }catch(e){
+                item.status.textContent = '失败';
+                item.resultBox.textContent = '上传或识别失败';
+            }
+        }
+        const stopBtnEl = document.getElementById('batchStopBtn'); if(stopBtnEl) stopBtnEl.style.display = 'none';
+        const startBtnEl = document.getElementById('batchStartBtn'); if(startBtnEl) startBtnEl.style.display = 'inline-block';
+        renderHistory();
+        return results;
+    }
+
+    function uploadFileToApi(file, preset, lang, onProgress){
+        return new Promise((resolve,reject)=>{
+            const url = '/api/ocr' + (preset||lang?('?'+['preset='+encodeURIComponent(preset),'lang='+encodeURIComponent(lang)].filter(Boolean).join('&')):'');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            const fd = new FormData(); fd.append('file', file, file.name);
+            xhr.upload.onprogress = function(e){ if(e.lengthComputable){ const pct = Math.round(e.loaded/e.total*100); onProgress && onProgress(pct); }};
+            xhr.onload = function(){ if(xhr.status>=200 && xhr.status<300){ try{ resolve(JSON.parse(xhr.responseText)); }catch(e){ reject(e); } }else{ reject(new Error('HTTP '+xhr.status)); } };
+            xhr.onerror = function(){ reject(new Error('network')); };
+            xhr.send(fd);
+        });
+    }
+
+    function loadImageFromFile(file){
+        // return an Image object whose src is a data URL (safer than revoked blob URLs)
+        return new Promise((resolve,reject)=>{
+            const reader = new FileReader();
+            reader.onload = function(ev){
+                const img = new Image();
+                img.onload = ()=>{ resolve(img); };
+                img.onerror = (e)=>{ reject(e); };
+                img.src = ev.target.result;
+            };
+            reader.onerror = function(err){ reject(err); };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function doFrontendPreprocess(){
+        const enabled = document.getElementById('frontendToggle').checked;
+        if(!enabled) return 0;
+        // 默认在前端预处理中执行灰度化
+        const gray = true;
+        const t0 = performance.now();
+        // perform lightweight processing on canvas pixels
+        try{
+            // Ensure canvas has the original image drawn. If originalImg is present, draw it scaled to canvas.
+            if(originalImg && originalImg.src){
+                try{ ctx.clearRect(0,0,canvas.width,canvas.height); }catch(e){}
+                ctx.drawImage(originalImg, 0, 0, canvas.width, canvas.height);
+                // show canvas since we've drawn processed preview
+                canvas.style.display = 'block';
+                // keep the original image visible (do not hide it)
+            }
+            const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
+            if(gray){
+                const d = imgData.data;
+                for(let i=0;i<d.length;i+=4){
+                    const r=d[i], g=d[i+1], b=d[i+2];
+                    const v = Math.round(0.299*r+0.587*g+0.114*b);
+                    d[i]=d[i+1]=d[i+2]=v;
+                }
+                ctx.putImageData(imgData,0,0);
+            }
+        }catch(e){ console.warn('前端预处理失败',e); }
+        const t1 = performance.now();
+        const ms = Math.round(t1-t0);
+        feTimeEl.textContent = ms;
+        sessionStorage.setItem('frontend_ms', ms);
+        sessionStorage.setItem('frontend_size', `${canvas.width}x${canvas.height}`);
+        return ms;
+    }
+
+    async function handleSubmit(e){
+        e.preventDefault();
+        errorsEl.style.display = 'none';
         const form = document.getElementById('ocrForm');
         const preset = document.getElementById('presetSelect').value;
         const lang = document.getElementById('langSelect').value;
-        let base = form.action.split('?')[0];
+        const base = form.action.split('?')[0];
         const params = [];
-        if (preset && preset !== '') params.push('preset=' + encodeURIComponent(preset));
-        if (lang && lang !== '') params.push('lang=' + encodeURIComponent(lang));
-        form.action = base + (params.length ? ('?' + params.join('&')) : '');
+        if(preset) params.push('preset='+encodeURIComponent(preset));
+        if(lang) params.push('lang='+encodeURIComponent(lang));
+        form.action = base + (params.length ? ('?'+params.join('&')) : '');
+
+        // ensure a file is provided
+        if(!fileInput.files || !fileInput.files[0]){
+            errorsEl.textContent = '请先选择一个图片文件再提交。';
+            errorsEl.style.display = 'block';
+            return false;
+        }
+
+        // if multiple files selected, route to batch upload flow
+        const files = Array.from(fileInput.files || []);
+        if(files.length > 1){
+            // frontend canvas preprocess is single-image only; inform user if enabled
+            if(document.getElementById('frontendToggle').checked){
+                // disable frontend preprocess for batch (informational only)
+                console.warn('前端预处理已启用，但批量上传将跳过前端处理，直接上传原始文件。');
+            }
+            batchAbort = false;
+            // show minimal loading indicator
+            showLoading();
+            try{
+                await batchUploadFiles(files, preset, lang);
+            }catch(e){ console.warn('批量上传失败', e); }
+            hideLoading();
+            return false;
+        }
+
         showLoading();
-        return true; // allow the form to submit
+        // front-end preprocess
+        let fe_ms = 0;
+        try{ fe_ms = await doFrontendPreprocess(); }catch(e){ console.warn(e); }
+
+        // convert canvas to blob and set as file input (so normal form POST sends processed image)
+        if(document.getElementById('frontendToggle').checked){
+            canvas.toBlob(async function(blob){
+                const fname = lastFileName || 'upload.png';
+                const newFile = new File([blob], fname, {type: blob.type});
+                // upload via XHR to /api/ocr for JSON response (better UX)
+                await uploadAndShowResult(newFile, preset, lang, fe_ms, true);
+            }, 'image/png');
+        }else{
+            // upload original file
+            await uploadAndShowResult(fileInput.files[0], preset, lang, fe_ms);
+        }
+        return false;
     }
+
+    // upload a File to /api/ocr?preset=...&lang=... and display results
+    function uploadAndShowResult(file, preset, lang, frontend_ms, client_pre){
+        return new Promise((resolve,reject)=>{
+            errorsEl.style.display = 'none';
+            const params = [];
+            if(preset) params.push('preset='+encodeURIComponent(preset));
+            if(lang) params.push('lang='+encodeURIComponent(lang));
+            if(client_pre) params.push('client_pre=1');
+            const url = '/api/ocr' + (params.length ? ('?'+params.join('&')) : '');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            const fd = new FormData();
+            fd.append('file', file, file.name);
+            xhr.upload.onprogress = function(e){
+                if(e.lengthComputable){
+                    // show progress in loading element
+                    loadingEl.querySelector('span').textContent = `Uploading... ${Math.round(e.loaded/e.total*100)}%`;
+                }
+            };
+            xhr.onloadstart = ()=>{ showLoading(); }
+            xhr.onerror = ()=>{ hideLoading(); errorsEl.textContent='上传失败'; errorsEl.style.display='block'; reject(); }
+            xhr.onload = ()=>{
+                hideLoading();
+                if(xhr.status>=200 && xhr.status<300){
+                    try{
+                        const res = JSON.parse(xhr.responseText);
+                        displayApiResult(res, frontend_ms, file);
+                        pushHistory(res, file, frontend_ms);
+                        resolve(res);
+                    }catch(err){ errorsEl.textContent='解析服务器响应失败'; errorsEl.style.display='block'; reject(err); }
+                }else{
+                    errorsEl.textContent = `服务器返回错误 ${xhr.status}`;
+                    errorsEl.style.display='block';
+                    reject();
+                }
+            };
+            xhr.send(fd);
+        });
+    }
+
+    function displayApiResult(res, frontend_ms, file){
+        // show backend image with boxes
+        const resultBlock = document.getElementById('resultBlock');
+        const resultTextBlock = document.getElementById('resultTextBlock');
+        if(res.result_img){
+            resultBlock.style.display = 'block';
+            resultTextBlock.style.display = 'block';
+            const imgEl = document.getElementById('resultStaticImg');
+            if(imgEl){
+                imgEl.onerror = ()=>{
+                    // processed image failed to load — clear overlay but do not show the verbose message
+                    const ov = document.getElementById('overlay'); if(ov) ov.innerHTML = '';
+                    console.warn('Processed image failed to load:', res && res.result_img);
+                };
+                imgEl.src = res.result_img + '?t=' + Date.now();
+                imgEl.onload = ()=>{ errorsEl.style.display = 'none'; renderOverlay(res.boxes || [], imgEl); };
+            }
+        }else{
+            resultBlock.style.display = 'none';
+            resultTextBlock.style.display = res.text ? 'block' : 'none';
+        }
+        // show text as clickable spans mapped to boxes
+        const textContainer = document.getElementById('resultText');
+        if(textContainer){
+            textContainer.innerHTML = '';
+            const boxes = res.boxes || [];
+            // if boxes available, render as per-box clickable spans
+            if(boxes.length){
+                boxes.forEach((b, idx)=>{
+                    const t = (b.text||'').trim();
+                    if(!t) return;
+                    const span = document.createElement('span');
+                    span.className = 'ocr-word';
+                    span.dataset.idx = idx;
+                    span.style.cursor = 'pointer';
+                    span.style.padding = '2px 4px';
+                    span.style.margin = '2px';
+                    span.style.borderRadius = '4px';
+                    span.textContent = t;
+                    span.onclick = (ev)=>{ toggleHighlight(idx); ev.stopPropagation(); };
+                    textContainer.appendChild(span);
+                });
+            }else{
+                // fallback: raw text
+                const pre = document.createElement('pre'); pre.style.margin=0; pre.style.whiteSpace='pre-wrap'; pre.textContent = res.text || '';
+                textContainer.appendChild(pre);
+            }
+        }
+        // timings
+        document.getElementById('frontend_ms').textContent = frontend_ms;
+        document.getElementById('backend_pre_ms').textContent = res.timings_ms ? res.timings_ms.preprocess : '-';
+        document.getElementById('backend_ocr_ms').textContent = res.timings_ms ? res.timings_ms.ocr : '-';
+        const total = (Number(frontend_ms||0) + Number(res.timings_ms?.preprocess||0) + Number(res.timings_ms?.ocr||0));
+        document.getElementById('total_ms').textContent = Math.round(total);
+    }
+
+    function renderOverlay(boxes, imgEl){
+        const overlay = document.getElementById('overlay');
+        overlay.innerHTML = '';
+        overlay.style.pointerEvents = 'auto';
+        const dispW = imgEl.clientWidth, dispH = imgEl.clientHeight;
+        const naturalW = imgEl.naturalWidth || dispW, naturalH = imgEl.naturalHeight || dispH;
+        const scaleX = dispW / naturalW, scaleY = dispH / naturalH;
+        overlay.style.width = dispW + 'px'; overlay.style.height = dispH + 'px';
+        overlay.style.left = 0; overlay.style.top = 0;
+        boxes.forEach((b, idx)=>{
+            if(!b.text || b.text.trim()==='') return;
+            const el = document.createElement('div');
+            el.className = 'overlay-box';
+            el.dataset.idx = idx;
+            el.style.position = 'absolute';
+            el.style.left = (b.left * scaleX) + 'px';
+            el.style.top = (b.top * scaleY) + 'px';
+            el.style.width = (b.width * scaleX) + 'px';
+            el.style.height = (b.height * scaleY) + 'px';
+            el.style.boxSizing = 'border-box';
+            el.style.border = '2px solid rgba(0,255,0,0.7)';
+            el.style.background = 'transparent';
+            el.style.cursor = 'pointer';
+            el.title = `${b.text} (conf=${b.conf})`;
+            el.addEventListener('mouseenter', ()=>{ el.style.border='2px solid rgba(255,0,0,0.85)'; highlightTextSpan(idx, true); });
+            el.addEventListener('mouseleave', ()=>{ if(!el.classList.contains('active')) el.style.border='2px solid rgba(0,255,0,0.7)'; highlightTextSpan(idx, false); });
+            el.addEventListener('click', (ev)=>{ ev.stopPropagation(); toggleHighlight(idx); });
+            overlay.appendChild(el);
+        });
+    }
+
+    function highlightTextSpan(idx, hover){
+        const span = document.querySelector(`#resultText .ocr-word[data-idx='${idx}']`);
+        if(!span) return;
+        if(hover){ span.style.background='rgba(255,230,200,0.9)'; }
+        else { span.style.background=''; }
+    }
+
+    function toggleHighlight(idx){
+        const overlayEl = document.querySelector(`#overlay .overlay-box[data-idx='${idx}']`);
+        const span = document.querySelector(`#resultText .ocr-word[data-idx='${idx}']`);
+        if(!overlayEl) return;
+        const active = overlayEl.classList.toggle('active');
+        if(active){ overlayEl.style.border='3px solid rgba(255,0,0,0.95)'; overlayEl.style.zIndex = 999; if(span) span.style.background='rgba(255,200,200,0.95)'; }
+        else { overlayEl.style.border='2px solid rgba(0,255,0,0.7)'; overlayEl.style.zIndex = ''; if(span) span.style.background=''; }
+    }
+
+    // history management (localStorage)
+    function pushHistory(res, file, frontend_ms){
+        try{
+            const key = 'ocr_history_v1';
+            const raw = localStorage.getItem(key);
+            const list = raw?JSON.parse(raw):[];
+            const thumb = canvas.toDataURL('image/png');
+            const item = {ts:Date.now(), name:file.name, size:file.size, text:res.text, preset:res.preset, lang:res.lang, frontend_ms:frontend_ms, backend:res.timings_ms, thumb, result_img: res.result_img, boxes: res.boxes};
+            list.unshift(item);
+            // if trimming required, collect removed items to notify server for cleanup
+            const removedFiles = [];
+            while(list.length>10){
+                const removed = list.pop();
+                if(removed && removed.result_img){ removedFiles.push(removed.result_img); }
+            }
+            localStorage.setItem(key, JSON.stringify(list));
+            renderHistory();
+            // fire-and-forget request to server to delete old result files (best-effort)
+            if(removedFiles.length){
+                try{
+                    fetch('/api/delete_results', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: removedFiles })
+                    }).then(resp=>resp.json()).then(j=>{
+                        console.log('cleanup result:', j);
+                    }).catch(err=>{ console.warn('cleanup failed', err); });
+                }catch(e){ console.warn('cleanup request failed', e); }
+            }
+        }catch(e){ console.warn('保存历史失败',e); }
+    }
+
+    function renderHistory(){
+        const key = 'ocr_history_v1';
+        const raw = localStorage.getItem(key);
+        const list = raw?JSON.parse(raw):[];
+        const container = document.getElementById('historyList');
+        container.innerHTML = '';
+        list.forEach((it, idx)=>{
+            const d = document.createElement('div');
+            d.style.border='1px solid #eee'; d.style.padding='6px'; d.style.borderRadius='6px'; d.style.minWidth='120px';
+            d.style.cursor='pointer';
+            d.title = new Date(it.ts).toLocaleString();
+            d.innerHTML = `<img src='${it.thumb}' style='width:100%;height:80px;object-fit:cover;border-radius:4px'/><div style='font-size:12px;margin-top:6px'>${it.name}</div>`;
+            d.onclick = ()=>{ // preview historical
+                document.getElementById('frontend_ms').textContent = it.frontend_ms;
+                document.getElementById('backend_pre_ms').textContent = it.backend ? it.backend.preprocess : '-';
+                document.getElementById('backend_ocr_ms').textContent = it.backend ? it.backend.ocr : '-';
+                // show image and overlay if available
+                const resultBlock = document.getElementById('resultBlock');
+                const resultTextBlock = document.getElementById('resultTextBlock');
+                if(it.result_img){
+                    resultBlock.style.display = 'block';
+                    resultTextBlock.style.display = 'block';
+                    const imgEl = document.getElementById('resultStaticImg');
+                    imgEl.src = it.result_img + '?t=' + Date.now();
+                    imgEl.onload = ()=>{ renderOverlay(it.boxes || [], imgEl); };
+                }else{
+                    resultBlock.style.display = 'none';
+                }
+                // render text
+                const textContainer = document.getElementById('resultText');
+                if(textContainer){
+                    textContainer.innerHTML = '';
+                    const boxes = it.boxes || [];
+                    if(boxes.length){
+                        boxes.forEach((b, idx)=>{
+                            const t = (b.text||'').trim();
+                            if(!t) return;
+                            const span = document.createElement('span');
+                            span.className = 'ocr-word';
+                            span.dataset.idx = idx;
+                            span.style.cursor = 'pointer';
+                            span.style.padding = '2px 4px';
+                            span.style.margin = '2px';
+                            span.style.borderRadius = '4px';
+                            span.textContent = t;
+                            span.onclick = (ev)=>{ toggleHighlight(idx); ev.stopPropagation(); };
+                            textContainer.appendChild(span);
+                        });
+                    }else{
+                        const pre = document.createElement('pre'); pre.style.margin=0; pre.style.whiteSpace='pre-wrap'; pre.textContent = it.text || '';
+                        textContainer.appendChild(pre);
+                    }
+                }
+            };
+            container.appendChild(d);
+        });
+    }
+
+    // on load, try to show frontend timings from previous submit
+    window.addEventListener('load', function(){
+        const fm = sessionStorage.getItem('frontend_ms');
+        const fs = sessionStorage.getItem('frontend_size');
+        if(fm!==null){ document.getElementById('frontend_ms').textContent = fm; }
+        if(fs!==null){ document.getElementById('feSize').textContent = fs; }
+        // compute total if backend timings exist
+        const backend_pre = parseFloat(document.getElementById('backend_pre_ms').textContent || 0) || 0;
+        const backend_ocr = parseFloat(document.getElementById('backend_ocr_ms').textContent || 0) || 0;
+        const frontend = parseFloat(fm||0);
+        if(!isNaN(frontend)){
+            document.getElementById('total_ms').textContent = Math.round(frontend + backend_pre + backend_ocr);
+        }
+        // clear stored frontend_ms to avoid stale values on next visit
+        sessionStorage.removeItem('frontend_ms');
+        sessionStorage.removeItem('frontend_size');
+        // if server-side rendered result exists, render overlay
+        const imgEl = document.getElementById('resultStaticImg');
+        if(imgEl && imgEl.src){
+            try{
+                const boxesData = imgEl.getAttribute('data-boxes') || '[]';
+                const boxes = JSON.parse(boxesData);
+                if(boxes && boxes.length){
+                    imgEl.onerror = ()=>{ const ov = document.getElementById('overlay'); if(ov) ov.innerHTML=''; console.warn('Processed image failed to load on initial render:', imgEl.src); };
+                    imgEl.onload = ()=>{ errorsEl.style.display='none'; renderOverlay(boxes, imgEl); };
+                }
+            }catch(e){ /* ignore */ }
+        }
+    });
 </script>
 
 </body>
