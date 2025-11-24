@@ -1,98 +1,494 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR Application</title>
+    <title>OCR 文字识别工具</title>
+    <link rel="icon" href="/static/favicon.ico">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+        }
+        body {
+            background-color: #f5f7fa;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
         }
         .container {
-            width: 60%;
-            margin: 50px auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            padding: 30px;
         }
         h1 {
+            color: #2d3748;
             text-align: center;
-            color: #333;
+            margin-bottom: 30px;
+            font-weight: 600;
+            border-bottom: 2px solid #4299e1;
+            padding-bottom: 15px;
         }
-        form {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
         }
-        input[type="file"] {
-            margin: 20px 0;
+        .upload-area:hover {
+            border-color: #4299e1;
+            background-color: #f0f8fb;
         }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
+        .upload-area p {
+            color: #718096;
+            margin-bottom: 20px;
             font-size: 16px;
-            border-radius: 5px;
         }
-        button:hover {
-            background-color: #45a049;
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-right: 20px;
         }
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        #file-upload {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .custom-file-btn, .process-btn {
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            color: #fff;
+        }
+        .custom-file-btn {
+            background-color: #4299e1;
+        }
+        .custom-file-btn:hover {
+            background-color: #3182ce;
+        }
+        .process-btn {
+            background-color: #38b2ac;
+        }
+        .process-btn:hover {
+            background-color: #319795;
+        }
+        .switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 25px 0;
+            color: #4a5568;
+            font-size: 15px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+            margin-right: 12px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e0;
+            transition: .4s;
+            border-radius: 26px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #4299e1;
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .preprocess-info {
+            color: #718096;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .preview-area {
+            margin: 20px 0;
+            text-align: center;
+        }
+        #preview-img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
         }
         .loading {
-            display: none;
             text-align: center;
+            padding: 30px;
+            color: #4299e1;
             font-size: 18px;
-            color: #4CAF50;
+            display: none;
+        }
+        .loading i {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(66,153,225,0.3);
+            border-radius: 50%;
+            border-top-color: #4299e1;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .result-area {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        .result-area h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .ocr-result {
+            background-color: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 20px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+        .timings {
+            margin-top: 20px;
+            background-color: #e8f4f8;
+            border-radius: 6px;
+            padding: 20px;
+            border-left: 4px solid #4299e1;
+        }
+        .timings h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .timing-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 15px;
+        }
+        .timing-item:last-child {
+            border-bottom: none;
+        }
+        .timing-label {
+            color: #4a5568;
+        }
+        .timing-value {
+            color: #2d3748;
+            font-weight: 500;
+        }
+        .error {
+            background-color: #fef7fb;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #e53e3e;
+            color: #c53030;
+            font-size: 16px;
+            display: none;
+        }
+        .error h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            .upload-area {
+                padding: 30px 15px;
+            }
+            .file-input-wrapper {
+                display: block;
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+            .switch-container {
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+            .timing-item {
+                flex-direction: column;
+                gap: 4px;
+            }
         }
     </style>
 </head>
 <body>
-
 <div class="container">
-    <h1>OCR Image Upload</h1>
-    <form action="/ocr" method="POST" enctype="multipart/form-data">
-        <label for="file">Upload an image:</label>
-        <input type="file" name="file" accept="image/*" required>
-        <button type="submit" onclick="showLoading()">Submit</button>
-    </form>
+    <h1>OCR 文字识别工具</h1>
 
-    <div class="loading" id="loading">
-        Processing... Please wait.
+    <div class="upload-area">
+        <p>支持 JPG、PNG 格式图片，建议图片分辨率不超过 4000×3000</p>
+
+        <div class="file-input-wrapper">
+            <button class="custom-file-btn">选择图片</button>
+            <input type="file" id="file-upload" accept="image/*" required>
+        </div>
+        <button class="process-btn" id="process-btn">识别文字</button>
+
+        <div class="switch-container">
+            <label class="switch">
+                <input type="checkbox" id="frontend-preprocess" checked>
+                <span class="slider"></span>
+            </label>
+            <span>启用前端预处理（缩放+灰度，提升识别速度）</span>
+        </div>
+
+        <div class="preprocess-info" id="preprocess-stats">已启用前端预处理 | 等待选择图片...</div>
+
+        <div class="preview-area">
+            <img id="preview-img" alt="图片预览">
+        </div>
     </div>
 
-    {% if text %}
-        <div class="result">
-            <h2>OCR Result:</h2>
-            <p>{{ text }}</p>
+    <div class="loading" id="loading">
+        <i></i> 正在处理图片，请稍候...
+    </div>
+
+    <div class="result-area">
+        <h2>识别结果</h2>
+        <div class="ocr-result" id="ocr-result">请上传图片并点击"识别文字"按钮</div>
+
+        <div class="timings">
+            <h3>处理时间统计（ms）</h3>
+            <div class="timing-item">
+                <span class="timing-label">前端预处理：</span>
+                <span class="timing-value" id="frontend-time">-</span>
+            </div>
+            <div class="timing-item">
+                <span class="timing-label">后端预处理：</span>
+                <span class="timing-value" id="backend-preprocess">-</span>
+            </div>
+            <div class="timing-item">
+                <span class="timing-label">OCR 识别：</span>
+                <span class="timing-value" id="ocr-time">-</span>
+            </div>
+            <div class="timing-item">
+                <span class="timing-label">总耗时（前端+后端）：</span>
+                <span class="timing-value" id="total-time">-</span>
+            </div>
         </div>
-    {% endif %}
-    {% if timings %}
-        <div class="result">
-            <h2>Timings (ms)</h2>
-            <p>Preprocess: {{ timings.preprocess }}</p>
-            <p>OCR: {{ timings.ocr }}</p>
-            <p>Total: {{ timings.total }}</p>
-        </div>
-    {% endif %}
+    </div>
+
+    <div class="error" id="error">
+        <h3>识别失败</h3>
+        <p id="error-message"></p>
+    </div>
 </div>
 
 <script>
-    function showLoading() {
+    let selectedFile = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // 确保DOM元素加载完成后再绑定事件
+        const processBtn = document.getElementById('process-btn');
+        if (processBtn) {
+            processBtn.addEventListener('click', processImage);
+        }
+
+        const fileUpload = document.getElementById('file-upload');
+        if (fileUpload) {
+            fileUpload.addEventListener('change', handleFileSelect);
+        }
+
+        const preprocessSwitch = document.getElementById('frontend-preprocess');
+        if (preprocessSwitch) {
+            preprocessSwitch.addEventListener('change', updatePreprocessStats);
+        }
+    });
+
+    function handleFileSelect(e) {
+        selectedFile = e.target.files[0];
+        if (!selectedFile) return;
+
+        const previewImg = document.getElementById('preview-img');
+        previewImg.src = URL.createObjectURL(selectedFile);
+        previewImg.style.display = 'block';
+
+        updatePreprocessStats();
+        document.getElementById('error').style.display = 'none';
+    }
+
+    function updatePreprocessStats() {
+        const preprocessSwitch = document.getElementById('frontend-preprocess');
+        const statsEl = document.getElementById('preprocess-stats');
+
+        if (selectedFile) {
+            statsEl.textContent = preprocessSwitch.checked
+                ? `已启用前端预处理 | 已选择：${selectedFile.name}（${(selectedFile.size / 1024 / 1024).toFixed(2)}MB）`
+                : `未启用前端预处理 | 已选择：${selectedFile.name}（${(selectedFile.size / 1024 / 1024).toFixed(2)}MB）`;
+        } else {
+            statsEl.textContent = preprocessSwitch.checked
+                ? '已启用前端预处理 | 等待选择图片...'
+                : '未启用前端预处理 | 等待选择图片...';
+        }
+    }
+
+    async function preprocessImage(file) {
+        const start = performance.now();
+        const img = new Image();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        img.src = URL.createObjectURL(file);
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () => reject(new Error('图片加载失败，请选择有效的图片文件'));
+        });
+
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+            const ratio = maxWidth / width;
+            width = maxWidth;
+            height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+            data[i] = gray;
+            data[i + 1] = gray;
+            data[i + 2] = gray;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        const end = performance.now();
+        const duration = Math.round(end - start);
+
+        return { blob, duration, width, height };
+    }
+
+    async function processImage() {
+        if (!selectedFile) {
+            showError('请先选择一张图片文件');
+            return;
+        }
+
+        document.getElementById('error').style.display = 'none';
+        document.getElementById('ocr-result').textContent = '处理中...';
+        resetTimings();
         document.getElementById('loading').style.display = 'block';
+
+        try {
+            const formData = new FormData();
+            const preprocessSwitch = document.getElementById('frontend-preprocess');
+            let frontendDuration = 0;
+
+            if (preprocessSwitch.checked) {
+                const { blob, duration, width, height } = await preprocessImage(selectedFile);
+                frontendDuration = duration;
+                formData.append('file', blob, `preprocessed_${selectedFile.name}`);
+                document.getElementById('preprocess-stats').textContent =
+                    `前端预处理完成 | 耗时：${duration}ms | 尺寸：${width}x${height} | 已选择：${selectedFile.name}`;
+            } else {
+                formData.append('file', selectedFile);
+                document.getElementById('preprocess-stats').textContent =
+                    `未启用前端预处理 | 已选择：${selectedFile.name}`;
+            }
+
+            const response = await fetch('/ocr', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`服务器错误：${response.statusText}`);
+            }
+
+            const result = await response.json();
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            document.getElementById('ocr-result').textContent = result.text || '未识别到文字';
+            document.getElementById('frontend-time').textContent = frontendDuration + ' ms';
+            document.getElementById('backend-preprocess').textContent = result.timings_ms?.preprocess || '-';
+            document.getElementById('ocr-time').textContent = result.timings_ms?.ocr || '-';
+
+            const backendTotal = (result.timings_ms?.preprocess || 0) + (result.timings_ms?.ocr || 0);
+            const totalTime = frontendDuration + backendTotal;
+            document.getElementById('total-time').textContent = totalTime.toFixed(1) + ' ms';
+
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function showError(message) {
+        const errorEl = document.getElementById('error');
+        const errorMsgEl = document.getElementById('error-message');
+        errorMsgEl.textContent = message;
+        errorEl.style.display = 'block';
+        document.getElementById('ocr-result').textContent = '识别失败';
+        resetTimings();
+    }
+
+    function resetTimings() {
+        document.getElementById('frontend-time').textContent = '-';
+        document.getElementById('backend-preprocess').textContent = '-';
+        document.getElementById('ocr-time').textContent = '-';
+        document.getElementById('total-time').textContent = '-';
     }
 </script>
-
 </body>
 </html>
