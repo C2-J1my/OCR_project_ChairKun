@@ -5,6 +5,11 @@
 - 将本分支修改的index.html替换主分支的index。html
 - 主分支新建static文件夹，加入本分支的favicon.ico（华工校徽文件）
 
+## 效果
+
+<img width="1070" height="1131" alt="效果图" src="https://github.com/user-attachments/assets/d2f2ed3e-152b-4b92-ad50-67826602be36" />
+
+
 ## 主要修改内容
 
 本次修改主要聚焦于 `index.html` 的展示增强和端侧预处理功能实现，具体包括以下几个方面：
