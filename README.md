@@ -2,7 +2,7 @@
 
 ## 使用说明
 
-- 将本分支修改的index。html替换主分支的index。html
+- 将本分支修改的index.html替换主分支的index。html
 - 主分支新建static文件夹，加入本分支的favicon.ico（华工校徽文件）
 
 ## 主要修改内容
