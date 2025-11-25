@@ -98,7 +98,7 @@ def ocr():
         #     try:
         #         Image.fromarray(processed_image).save(result_path)
         #     except Exception:
-        #         pass
+                # pass
 
 
         pre_end = time.perf_counter()
@@ -106,14 +106,14 @@ def ocr():
         ocr_start = time.perf_counter()
         lang = request.args.get('lang', 'chi_sim')
         try:
-            text = pytesseract.image_to_string(processed_image, lang=lang, config='--psm 6')
+            text = pytesseract.image_to_string(processed_image, lang=lang, config='--psm 11')
         except Exception:
             text = pytesseract.image_to_string(processed_image, lang='eng', config='--psm 6')
         ocr_end = time.perf_counter()
 
         # 使用 pytesseract 返回的位置信息绘制绿色矩形框并收集 boxes
         try:
-            data = pytesseract.image_to_data(processed_image, lang=lang, config='--psm 6', output_type=Output.DICT)
+            data = pytesseract.image_to_data(processed_image, lang=lang, config='--psm 11', output_type=Output.DICT)
             # 转为 OpenCV BGR 图像以便绘制
             cv_img = cv2.cvtColor(np.array(processed_image), cv2.COLOR_RGB2BGR)
             boxes = []
@@ -238,10 +238,19 @@ def api_ocr():
     except Exception:
         boxes = []
         result_url = None
+    if hasattr(img, 'size'):
+        src_w, src_h = img.size
+    else:
+        shape = getattr(img, 'shape', None)
+        if shape is not None and len(shape) >= 2:
+            src_h, src_w = shape[:2]
+        else:
+            src_w = src_h = None
     t1 = time.perf_counter()
     return jsonify({
         "text": text,
         "boxes": boxes,
+        "image_size": {"width": src_w, "height": src_h},
         "timings_ms": {
             "preprocess": round((pre1 - pre0) * 1000, 1),
             "ocr": round((ocr1 - ocr0) * 1000, 1),

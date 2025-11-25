@@ -5,38 +5,250 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCR Application</title>
     <style>
-        :root{--accent:#4CAF50;--muted:#888}
-        html,body{height:100%;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f4f4f9}
-        .container{max-width:1000px;width:94%;margin:28px auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-        h1{text-align:center;color:#222;margin:6px 0 18px}
-        form{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center}
+        :root{
+            --accent:#4CAF50;
+            --muted:#8E9AAF;
+            --bg:#eef1f7;
+            --card:#ffffff;
+            --border:rgba(255,255,255,0.6);
+        }
+        html,body{
+            height:100%;
+            margin:0;
+            padding:0;
+            font-family:"Segoe UI",Arial,Helvetica,sans-serif;
+            background:radial-gradient(circle at top,#f5fbff,#e7ebf5);
+            color:#1a1c20;
+        }
+        .page{
+            min-height:100%;
+            padding:24px;
+            box-sizing:border-box;
+        }
+        .container{
+            max-width:1200px;
+            width:100%;
+            margin:0 auto;
+            background:linear-gradient(135deg,#fefefe,rgba(255,255,255,0.85));
+            padding:28px 32px 40px;
+            border-radius:24px;
+            box-shadow:0 25px 60px rgba(22,40,79,0.12);
+            position:relative;
+        }
+        .container:before{
+            content:"";
+            position:absolute;
+            inset:18px;
+            border-radius:20px;
+            border:1px solid var(--border);
+            pointer-events:none;
+        }
+         h1{
+             font-size:32px;
+             margin:0;
+             color:#14213d;
+             letter-spacing:0.5px;
+         }
+         h2,h3{
+             margin:0 0 10px;
+             font-weight:600;
+             color:#111827;
+         }
+         .hero{
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:16px;
+            margin-bottom:26px;
+        }
+        .hero-desc{
+            color:#4b5563;
+            font-size:15px;
+            line-height:1.6;
+        }
+        .badge{
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:6px 12px;
+            border-radius:999px;
+            background:#e9f6ec;
+            color:#1e7d3d;
+            font-size:13px;
+            font-weight:600;
+        }
+         form{display:flex;flex-direction:column;gap:12px}
+         .control-panel{
+             margin-top:6px;
+             padding:16px 18px;
+             border-radius:18px;
+             background:linear-gradient(145deg,#f9fbff,#f3f6fc);
+             border:1px solid rgba(148,163,184,0.35);
+             box-shadow:
+                 0 12px 26px rgba(15,23,42,0.08),
+                 0 0 0 1px rgba(255,255,255,0.9) inset;
+             display:flex;
+             flex-wrap:wrap;
+             gap:18px;
+             align-items:flex-start;
+             justify-content:space-between;
+         }
         .upload-col{flex:1 1 320px;min-width:260px}
         .controls-col{flex:1 1 300px;min-width:240px}
-        label{display:block;margin:8px 0;font-weight:600}
+        label{display:block;margin:8px 0;font-weight:600;color:#111827}
         input[type=file]{display:block}
         select,input[type=checkbox]{margin:6px 0}
-        button{background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;border:none;font-weight:600;cursor:pointer}
+        button{background:var(--accent);color:#fff;padding:12px 18px;border-radius:10px;border:none;font-weight:600;cursor:pointer;box-shadow:0 10px 20px rgba(76,175,80,0.28);transition:transform 0.2s ease}
         button:active{transform:translateY(1px)}
-        .result{margin-top:18px;padding:14px;background:#fbfbfb;border:1px solid #eee;border-radius:8px}
+        .pill-btn{background:#edf2ff;color:#2947c7;box-shadow:none}
+         .result{
+             margin-top:18px;
+             padding:18px 20px;
+             background:linear-gradient(145deg,#fbfbff,#f3f6fc);
+             border:1px solid rgba(148,163,184,0.18);
+             border-radius:18px;
+             box-shadow:
+                 0 18px 40px rgba(15,23,42,0.10),
+                 0 0 0 1px rgba(255,255,255,0.9) inset;
+         }
         .loading{display:none;text-align:center;font-size:16px;color:var(--accent)}
-        .preview{border:1px dashed #ddd;padding:8px;border-radius:6px;background:#fafafa}
+         .preview{border:1px dashed rgba(148,163,184,0.7);padding:14px;border-radius:16px;background:#f9fbff;min-height:220px;display:flex;align-items:center;justify-content:center}
         canvas{max-width:100%;height:auto;border-radius:4px;display:block}
-        /* 2x2 grid layout for main results area */
-        .grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:12px;align-items:start}
-        .grid .cell{min-height:120px}
-        .meta{font-size:13px;color:var(--muted);margin-top:6px}
-        .timings{display:flex;flex-wrap:wrap;gap:10px}
-        .timings .tile{background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #eee;min-width:140px}
+        .result-layout{display:grid;grid-template-columns:1.15fr 0.85fr;grid-template-rows:auto auto;gap:18px;align-items:start;margin-top:24px}
+        .result-card{min-height:160px}
+        .preview-card{grid-row:1 / span 2;}
+        .preview-media{position:relative;border-radius:20px;background:#f5f7fb;padding:8px;min-height:280px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+        .preview-media img{width:100%;max-height:100%;object-fit:contain;border-radius:16px;display:block;position:relative;z-index:1}
+        .overlay-layer{position:absolute;top:8px;left:8px;right:8px;bottom:8px;border-radius:16px;pointer-events:none;z-index:2}
+        .overlay-box{
+            position:absolute;
+            border:2px solid rgba(0,255,0,0.75);
+            border-radius:10px;
+            background:rgba(46,204,64,0.08);
+            box-shadow:0 4px 10px rgba(20,33,61,0.18);
+        }
+        .meta{font-size:13px;color:var(--muted);margin-top:10px}
+         .timings{display:flex;flex-wrap:wrap;gap:10px}
+        .timings .tile{
+            background:#fff;
+            padding:12px 16px;
+            border-radius:12px;
+            border:1px solid rgba(20,33,61,0.08);
+            min-width:140px;
+            box-shadow:0 15px 30px rgba(17,24,39,0.08);
+        }
         .error{color:#b00020;background:#ffecec;padding:8px;border-radius:6px;border:1px solid #f5c6cb;margin-top:10px}
-        @media(max-width:720px){.container{width:96%;padding:12px}.timings{flex-direction:column}}
+         .list-card{
+             background:linear-gradient(145deg,#f9fbff,#eef2ff);
+             color:#0f172a;
+             border-radius:18px;
+             padding:18px 20px;
+             box-shadow:
+                 0 18px 38px rgba(15,23,42,0.10),
+                 0 0 0 1px rgba(255,255,255,0.9) inset;
+         }
+         .list-card h3{color:#0f172a;margin-top:0}
+        .list-table{
+            margin:0;
+            padding:0 6px 0 0;
+            list-style:none;
+            max-height:280px;
+            overflow-y:auto;
+        }
+        .list-table::-webkit-scrollbar{width:6px}
+        .list-table::-webkit-scrollbar-track{background:transparent}
+        .list-table::-webkit-scrollbar-thumb{background:rgba(148,163,184,0.6);border-radius:4px}
+        .rank-item{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:12px 0;
+             border-bottom:1px solid rgba(148,163,184,0.25);
+        }
+        .rank-item:last-child{border-bottom:none}
+        .rank-no{
+            width:38px;
+            height:38px;
+            border-radius:14px;
+             background:rgba(34,197,94,0.08);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:700;
+        }
+        .rank-text{
+            flex:1;
+            display:flex;
+            flex-direction:column;
+            font-size:15px;
+        }
+         .rank-text strong{color:#0f172a;font-size:15px}
+         .rank-text small{color:rgba(100,116,139,0.95);margin-top:2px}
+        .rank-score{
+             font-weight:700;
+             letter-spacing:0.5px;
+             color:#16a34a;
+        }
+        .result-placeholder{
+            justify-content:center;
+            color:rgba(255,255,255,0.65);
+        }
+        .batch-results{
+            margin:26px 0 8px;
+            display:none;
+        }
+        .batch-results h3{margin:0 0 12px;color:#14213d}
+        .batch-scroll{
+            display:flex;
+            gap:14px;
+            overflow-x:auto;
+            padding-bottom:6px;
+        }
+        .batch-card{
+            min-width:200px;
+            background:#fff;
+            border-radius:16px;
+            border:1px solid rgba(20,33,61,0.08);
+            box-shadow:0 12px 28px rgba(20,33,61,0.12);
+            padding:12px;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            cursor:pointer;
+        }
+        .batch-card img{
+            width:100%;
+            height:120px;
+            object-fit:cover;
+            border-radius:12px;
+        }
+        .batch-card .batch-status{font-size:13px;color:#4b5563}
+        .batch-card .batch-score{font-weight:700;color:#111827}
+        @media(max-width:900px){
+            .container{padding:22px}
+            .hero{flex-direction:column;align-items:flex-start}
+            .result-layout{grid-template-columns:1fr}
+            .preview-card{grid-row:auto}
+        }
+        @media(max-width:720px){
+            .page{padding:16px 12px}
+            .timings{flex-direction:column}
+        }
     </style>
 </head>
 <body>
 
+<div class="page">
 <div class="container">
-    <h1>OCR Image Upload</h1>
+    <div class="hero">
+        <div>
+            <div class="badge">Tesseract</div>
+            <h1>全景视觉 OCR 控制台</h1>
+            <p class="hero-desc">上传或拖拽图片，即可实时查看识别框、高置信度文本与多语言结果。右侧为识别结果列表，点击可聚焦对应区域。</p>
+        </div>
+    </div>
     <form id="ocrForm" action="/ocr" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit(event)">
-        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+        <div class="control-panel">
             <div style="flex:1 1 420px;min-width:260px">
                 <label for="file">上传图片（支持 JPG/PNG，支持拖放 & 批量，最大预览宽度 800px）：</label>
                 <div id="dropZone" style="border:1px dashed #ccc;padding:10px;border-radius:6px;background:#fff;">
@@ -80,42 +292,34 @@
         </div>
     </form>
 
-    <!-- Grid 2x2: TL original preview, TR processed image, BL thumbnails, BR interactive text -->
-    <div class="middle grid" style="margin-top:16px">
-        <div id="cell-original" class="cell">
-            <div class="result">
-                <h3>原始图片预览</h3>
-                <div class="preview">
-                    <img id="originalImg" src="" alt="Original preview" style="max-width:100%;height:auto;display:block;border-radius:4px" />
-                    <canvas id="previewCanvas" width="640" height="360" style="display:none; border-radius:4px; margin-top:6px"></canvas>
-                </div>
-                <div class="meta" id="previewMeta">预处理耗时: <span id="feTime">-</span> ms ｜ 处理后尺寸: <span id="feSize">-</span></div>
-            </div>
-        </div>
+    <div id="batchResults" class="batch-results">
+        <h3>批量处理结果</h3>
+        <div id="batchList" class="batch-scroll"></div>
+    </div>
 
-        <div id="cell-processed" class="cell">
-            <div class="result" id="resultBlock" style="display: none;">
-                <h3>识别后图片</h3>
-                <div style="position:relative;display:inline-block;max-width:100%">
-                    <img id="resultStaticImg" src="{{ result_img or '' }}" data-boxes='{{ boxes|tojson|safe if boxes else "[]" }}' alt="Processed image" style="max-width:100%; height:auto; border:1px solid #ccc; display:block;" />
-                    <div id="overlay" style="position:absolute;left:0;top:0;"></div>
-                </div>
+    <div class="result-layout">
+        <section class="result result-card preview-card">
+            <h3>图片预览 &amp; 识别文本</h3>
+            <div class="preview-media">
+                <img id="originalImg" src="" alt="Original preview" style="display:none" />
+                <canvas id="previewCanvas" width="640" height="360" style="display:none; border-radius:12px; position:absolute; left:12px; top:12px;"></canvas>
+                <div id="previewOverlay" class="overlay-layer"></div>
             </div>
-        </div>
+            <div class="meta" id="previewMeta">预处理耗时: <span id="feTime">-</span> ms ｜ 处理后尺寸: <span id="feSize">-</span></div>
+        </section>
 
-        <div id="cell-thumbs" class="cell">
-            <div class="result">
-                <h3>结果缩略图</h3>
-                <div id="resultList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <section class="result result-card" id="resultTextBlock" style="display:none">
+            <h3>可交互的识别文本</h3>
+            <div class="meta" style="margin-top:4px;margin-bottom:8px">
+                文本平均置信度：<strong id="totalConf">-</strong>
             </div>
-        </div>
+            <div id="resultText" style="padding:12px;background:#fff;border:1px solid #eee;border-radius:12px;min-height:120px;white-space:pre-wrap;word-wrap:break-word"></div>
+        </section>
 
-        <div id="cell-text" class="cell">
-            <div class="result" id="resultTextBlock" style="display:none">
-                <h3>可交互的识别文本（点击高亮对应图片区域）</h3>
-                <div id="resultText" style="padding:8px;background:#fff;border:1px solid #eee;border-radius:6px;min-height:60px;white-space:pre-wrap;word-wrap:break-word"></div>
-            </div>
-        </div>
+        <section class="result list-card result-card" id="rankingBlock">
+            <h3>OCR 识别榜单</h3>
+            <ul class="list-table" id="resultList"></ul>
+        </section>
     </div>
 
     <div class="loading" id="loading">
@@ -154,6 +358,7 @@
         <div id="historyList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
 </div>
+</div>
 
 <script>
     // Helper: read file into Image object
@@ -166,11 +371,81 @@
     const feSizeEl = document.getElementById('feSize');
     const fileMeta = document.getElementById('fileMeta');
     const multiNotice = document.getElementById('multiNotice');
+    const previewOverlay = document.getElementById('previewOverlay');
+    const rankingList = document.getElementById('resultList');
+    const batchResultsEl = document.getElementById('batchResults');
+    const batchListEl = document.getElementById('batchList');
     const loadingEl = document.getElementById('loading');
     const errorsEl = document.getElementById('errors');
+    const resultTextBlock = document.getElementById('resultTextBlock');
+    const totalConfEl = document.getElementById('totalConf');
+    const CONF_THRESHOLD = 50;
 
     let lastFileName = null;
     let batchAbort = false;
+    let currentBoxes = [];
+    let currentSourceSize = {width:null, height:null};
+    let pendingSourceSize = {width:null, height:null};
+    let pendingOverlayBoxes = [];
+    let overlayLoadHandlerAttached = false;
+
+    function clearOverlay(){
+        if(!previewOverlay) return;
+        previewOverlay.innerHTML = '';
+        previewOverlay.style.display = 'none';
+        currentBoxes = [];
+        pendingOverlayBoxes = [];
+        if(originalImg && overlayLoadHandlerAttached){
+            originalImg.removeEventListener('load', handleOverlayLoad);
+            overlayLoadHandlerAttached = false;
+        }
+    }
+
+    function withCacheBust(url){
+        if(!url) return url;
+        if(url.startsWith('data:')) return url;
+        return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    }
+
+    function normalizeSize(size){
+        if(!size) return null;
+        const w = Number(size.width ?? size.W ?? size.w);
+        const h = Number(size.height ?? size.H ?? size.h);
+        if(Number.isFinite(w) && Number.isFinite(h) && w>0 && h>0){
+            return {width:w, height:h};
+        }
+        return null;
+    }
+
+    function getNormalizedConf(box){
+        if(!box) return null;
+        let c = parseFloat(box.conf ?? box.score ?? 0);
+        if(isNaN(c)) return null;
+        if(c <= 1) c *= 100;
+        return c;
+    }
+
+    function setPendingSource(size){
+        const norm = normalizeSize(size);
+        if(norm){
+            pendingSourceSize = norm;
+        }
+    }
+
+    function commitSourceSize(size){
+        const norm = normalizeSize(size) || pendingSourceSize || (originalImg && originalImg.naturalWidth ? {width: originalImg.naturalWidth, height: originalImg.naturalHeight} : null);
+        if(norm){
+            currentSourceSize = norm;
+            pendingSourceSize = norm;
+        }
+    }
+
+    function handleOverlayLoad(){
+        overlayLoadHandlerAttached = false;
+        if(pendingOverlayBoxes && pendingOverlayBoxes.length){
+            renderOverlay(pendingOverlayBoxes, originalImg);
+        }
+    }
 
     function showLoading() { loadingEl.style.display = 'flex'; }
     function hideLoading() { loadingEl.style.display = 'none'; }
@@ -186,21 +461,19 @@
         feSizeEl.textContent = '-';
         errorsEl.style.display = 'none';
         try{ fileInput.value = ''; }catch(e){}
+        pendingSourceSize = {width:null,height:null};
+        currentSourceSize = {width:null,height:null};
 
-        // hide and clear processed result image and overlay
-        const resultBlock = document.getElementById('resultBlock');
-        const resultTextBlock = document.getElementById('resultTextBlock');
-        const resultList = document.getElementById('resultList');
-        const resultImg = document.getElementById('resultStaticImg');
-        const overlay = document.getElementById('overlay');
+        // hide and clear processed result information
         const resultText = document.getElementById('resultText');
-        if(resultBlock){ resultBlock.style.display = 'none'; }
         if(resultTextBlock){ resultTextBlock.style.display = 'none'; }
-        if(resultList){ resultList.innerHTML = ''; }
-        if(resultImg){ resultImg.src = ''; resultImg.removeAttribute('data-boxes'); }
-        if(overlay){ overlay.innerHTML = ''; }
+        renderRanking([]);
+        clearOverlay();
         if(resultText){ resultText.innerHTML = ''; }
+        if(totalConfEl){ totalConfEl.textContent = '-'; }
         if(multiNotice){ multiNotice.style.display = 'none'; }
+        if(batchListEl){ batchListEl.innerHTML=''; }
+        if(batchResultsEl){ batchResultsEl.style.display='none'; }
 
         // reset timing displays
         const fm = document.getElementById('frontend_ms'); if(fm) fm.textContent='-';
@@ -226,6 +499,8 @@
             originalImg.src = img.src;
             originalImg.style.display = 'block';
         }
+        clearOverlay();
+        setPendingSource({width: img.width, height: img.height});
         // prepare canvas dimensions for potential frontend processing (scale to MAX_WIDTH)
         const scale = Math.min(1, MAX_WIDTH / img.width);
         const w = Math.round(img.width * scale);
@@ -265,6 +540,8 @@
             originalImg.src = img.src;
             originalImg.style.display = 'block';
         }
+        clearOverlay();
+        setPendingSource({width: img.width, height: img.height});
         const scale = Math.min(1, MAX_WIDTH / img.width);
         const w = Math.round(img.width * scale);
         const h = Math.round(img.height * scale);
@@ -298,58 +575,74 @@
         });
     }
 
-    function createBatchItem(file){
-        const id = 'batch_' + Math.random().toString(36).slice(2,9);
-        const wrap = document.createElement('div');
-        wrap.style.display='flex'; wrap.style.gap='8px'; wrap.style.alignItems='center'; wrap.style.border='1px solid #eee'; wrap.style.padding='8px'; wrap.style.borderRadius='6px';
-        const thumb = document.createElement('img'); thumb.style.width='84px'; thumb.style.height='56px'; thumb.style.objectFit='cover'; thumb.style.borderRadius='4px'; thumb.src='';
-        const info = document.createElement('div'); info.style.flex='1';
-        const title = document.createElement('div'); title.textContent = file.name; title.style.fontSize='13px'; title.style.fontWeight='600';
-        const status = document.createElement('div'); status.textContent='等待上传'; status.style.fontSize='12px'; status.style.color='var(--muted)';
-        const progressBar = document.createElement('div'); progressBar.style.height='8px'; progressBar.style.background='#f1f1f1'; progressBar.style.borderRadius='4px'; progressBar.style.marginTop='6px';
-        const progressInner = document.createElement('div'); progressInner.style.height='100%'; progressInner.style.width='0%'; progressInner.style.background='linear-gradient(90deg, #4caf50, #1976d2)'; progressInner.style.borderRadius='4px';
-        progressBar.appendChild(progressInner);
-        info.appendChild(title); info.appendChild(status); info.appendChild(progressBar);
-        const resultBox = document.createElement('div'); resultBox.style.minWidth='120px'; resultBox.style.textAlign='right';
-        wrap.appendChild(thumb); wrap.appendChild(info); wrap.appendChild(resultBox);
-        wrap.style.cursor = 'default';
-        // generate thumb
-        const reader = new FileReader(); reader.onload = (ev)=>{ thumb.src = ev.target.result; }; reader.readAsDataURL(file);
-        return {wrap, status, progressInner, resultBox, thumb};
+    function createBatchItem(file, idx){
+        if(!batchListEl) return null;
+        const card = document.createElement('div');
+        card.className = 'batch-card';
+        card.style.cursor = 'default';
+        const thumb = document.createElement('img');
+        thumb.alt = file.name;
+        const name = document.createElement('div');
+        name.style.fontWeight = '600';
+        name.style.fontSize = '14px';
+        name.textContent = `${String(idx+1).padStart(2,'0')} · ${file.name}`;
+        const status = document.createElement('div');
+        status.className = 'batch-status';
+        status.textContent = '等待上传';
+        const score = document.createElement('div');
+        score.className = 'batch-score';
+        score.textContent = '--';
+        card.appendChild(thumb);
+        card.appendChild(name);
+        card.appendChild(status);
+        card.appendChild(score);
+        batchListEl.appendChild(card);
+        const item = {card, status, score, thumbSrc:''};
+        const reader = new FileReader();
+        reader.onload = ev => {
+            item.thumbSrc = ev.target.result;
+            thumb.src = item.thumbSrc;
+            const temp = new Image();
+            temp.onload = ()=>{ item.sourceSize = {width: temp.width, height: temp.height}; };
+            temp.src = item.thumbSrc;
+        };
+        reader.readAsDataURL(file);
+        return item;
     }
 
     async function batchUploadFiles(files, preset, lang){
-        const listEl = document.getElementById('resultList');
-        listEl.innerHTML = '';
+        if(!batchListEl) return [];
+        batchListEl.innerHTML = '';
+        if(batchResultsEl){ batchResultsEl.style.display = 'block'; }
         const results = [];
         for(let i=0;i<files.length;i++){
             if(batchAbort) break;
             const f = files[i];
-            const item = createBatchItem(f);
-            // append a thumbnail-only entry to the result list
-            const thumbWrap = document.createElement('div');
-            thumbWrap.style.width = '100%'; thumbWrap.style.height = '80px'; thumbWrap.style.overflow='hidden'; thumbWrap.style.border='1px solid #eee'; thumbWrap.style.borderRadius='6px'; thumbWrap.style.display='flex'; thumbWrap.style.alignItems='center'; thumbWrap.style.justifyContent='center'; thumbWrap.style.cursor='default';
-            // ensure thumb styling
-            item.thumb.style.width = '100%'; item.thumb.style.height = '100%'; item.thumb.style.objectFit = 'cover'; item.thumb.style.borderRadius = '4px';
-            thumbWrap.appendChild(item.thumb);
-            listEl.appendChild(thumbWrap);
+            const item = createBatchItem(f, i);
+            if(!item) continue;
             item.status.textContent = '上传中...';
             try{
-                const res = await uploadFileToApi(f, preset, lang, (pct)=>{ item.progressInner.style.width = pct + '%'; });
-                item.status.textContent = '完成';
-                // show small text snippet
-                const txt = document.createElement('div'); txt.style.fontSize='12px'; txt.style.marginTop='6px'; txt.textContent = (res.text||'').slice(0,120);
-                item.resultBox.appendChild(txt);
-                // store result on the item and make thumbnail clickable to view full result
-                item.result = res;
-                thumbWrap.style.cursor = 'pointer';
-                thumbWrap.onclick = ()=>{ displayApiResult(res, 0, f); window.scrollTo({top:0,behavior:'smooth'}); };
+                const res = await uploadFileToApi(f, preset, lang, (pct)=>{ item.status.textContent = `上传中 ${pct}%`; });
+                item.status.textContent = '识别完成';
+                item.score.textContent = formatScore(res.boxes || []);
+                item.card.style.cursor = 'pointer';
+                item.card.onclick = ()=>{
+                    clearOverlay();
+                    if(originalImg && item.thumbSrc){
+                        originalImg.style.display = 'block';
+                        originalImg.src = item.thumbSrc;
+                    }
+                    const size = normalizeSize(res.image_size || item.sourceSize);
+                    if(size){ pendingSourceSize = size; }
+                    displayApiResult(res, 0, res.image_size || item.sourceSize);
+                    window.scrollTo({top:0,behavior:'smooth'});
+                };
                 // save to history
-                pushHistory(res, f, 0);
+                pushHistory(res, f, 0, item.thumbSrc, res.image_size || item.sourceSize);
                 results.push(res);
             }catch(e){
-                item.status.textContent = '失败';
-                item.resultBox.textContent = '上传或识别失败';
+                item.status.textContent = '上传或识别失败';
+                item.score.textContent = '--';
             }
         }
         const stopBtnEl = document.getElementById('batchStopBtn'); if(stopBtnEl) stopBtnEl.style.display = 'none';
@@ -389,30 +682,46 @@
     async function doFrontendPreprocess(){
         const enabled = document.getElementById('frontendToggle').checked;
         if(!enabled) return 0;
-        // 默认在前端预处理中执行灰度化
-        const gray = true;
         const t0 = performance.now();
-        // perform lightweight processing on canvas pixels
         try{
-            // Ensure canvas has the original image drawn. If originalImg is present, draw it scaled to canvas.
+            // 1. 先把原图按 canvas 尺寸画上去
             if(originalImg && originalImg.src){
                 try{ ctx.clearRect(0,0,canvas.width,canvas.height); }catch(e){}
                 ctx.drawImage(originalImg, 0, 0, canvas.width, canvas.height);
-                // show canvas since we've drawn processed preview
                 canvas.style.display = 'block';
-                // keep the original image visible (do not hide it)
             }
-            const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
-            if(gray){
-                const d = imgData.data;
-                for(let i=0;i<d.length;i+=4){
-                    const r=d[i], g=d[i+1], b=d[i+2];
-                    const v = Math.round(0.299*r+0.587*g+0.114*b);
-                    d[i]=d[i+1]=d[i+2]=v;
-                }
-                ctx.putImageData(imgData,0,0);
+            const width = canvas.width;
+            const height = canvas.height;
+            if(!width || !height) return 0;
+
+            const imgData = ctx.getImageData(0,0,width,height);
+            const data = imgData.data;
+
+            // 2. 转灰度 + 统计最小/最大灰度，用于对比度拉伸（近似后端 CLAHE 的效果）
+            let minV = 255, maxV = 0;
+            const gray = new Uint8ClampedArray(width*height);
+            for(let i=0, px=0;i<data.length;i+=4,px++){
+                const v = Math.round(0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]);
+                gray[px] = v;
+                if(v < minV) minV = v;
+                if(v > maxV) maxV = v;
             }
-        }catch(e){ console.warn('前端预处理失败',e); }
+            const range = Math.max(1, maxV - minV);
+
+            // 3. 线性对比度拉伸：把 [minV,maxV] 映射到 [0,255]
+            for(let i=0, px=0;i<data.length;i+=4,px++){
+                const v = gray[px];
+                const stretched = Math.min(255, Math.max(0, Math.round((v - minV) * 255 / range)));
+                data[i] = data[i+1] = data[i+2] = stretched;
+                data[i+3] = 255;
+            }
+            ctx.putImageData(imgData,0,0);
+
+            // 4. 记录送给后端的“源尺寸”，用于后端坐标与前端预览对齐
+            setPendingSource({width, height});
+        }catch(e){
+            console.warn('前端预处理失败',e);
+        }
         const t1 = performance.now();
         const ms = Math.round(t1-t0);
         feTimeEl.textContent = ms;
@@ -504,8 +813,8 @@
                 if(xhr.status>=200 && xhr.status<300){
                     try{
                         const res = JSON.parse(xhr.responseText);
-                        displayApiResult(res, frontend_ms, file);
-                        pushHistory(res, file, frontend_ms);
+                        displayApiResult(res, frontend_ms, res.image_size || pendingSourceSize);
+                        pushHistory(res, file, frontend_ms, originalImg ? originalImg.src : null, res.image_size || pendingSourceSize);
                         resolve(res);
                     }catch(err){ errorsEl.textContent='解析服务器响应失败'; errorsEl.style.display='block'; reject(err); }
                 }else{
@@ -518,55 +827,14 @@
         });
     }
 
-    function displayApiResult(res, frontend_ms, file){
-        // show backend image with boxes
-        const resultBlock = document.getElementById('resultBlock');
-        const resultTextBlock = document.getElementById('resultTextBlock');
-        if(res.result_img){
-            resultBlock.style.display = 'block';
-            resultTextBlock.style.display = 'block';
-            const imgEl = document.getElementById('resultStaticImg');
-            if(imgEl){
-                imgEl.onerror = ()=>{
-                    // processed image failed to load — clear overlay but do not show the verbose message
-                    const ov = document.getElementById('overlay'); if(ov) ov.innerHTML = '';
-                    console.warn('Processed image failed to load:', res && res.result_img);
-                };
-                imgEl.src = res.result_img + '?t=' + Date.now();
-                imgEl.onload = ()=>{ errorsEl.style.display = 'none'; renderOverlay(res.boxes || [], imgEl); };
-            }
-        }else{
-            resultBlock.style.display = 'none';
-            resultTextBlock.style.display = res.text ? 'block' : 'none';
-        }
-        // show text as clickable spans mapped to boxes
-        const textContainer = document.getElementById('resultText');
-        if(textContainer){
-            textContainer.innerHTML = '';
-            const boxes = res.boxes || [];
-            // if boxes available, render as per-box clickable spans
-            if(boxes.length){
-                boxes.forEach((b, idx)=>{
-                    const t = (b.text||'').trim();
-                    if(!t) return;
-                    const span = document.createElement('span');
-                    span.className = 'ocr-word';
-                    span.dataset.idx = idx;
-                    span.style.cursor = 'pointer';
-                    span.style.padding = '2px 4px';
-                    span.style.margin = '2px';
-                    span.style.borderRadius = '4px';
-                    span.textContent = t;
-                    span.onclick = (ev)=>{ toggleHighlight(idx); ev.stopPropagation(); };
-                    textContainer.appendChild(span);
-                });
-            }else{
-                // fallback: raw text
-                const pre = document.createElement('pre'); pre.style.margin=0; pre.style.whiteSpace='pre-wrap'; pre.textContent = res.text || '';
-                textContainer.appendChild(pre);
-            }
-        }
-        // timings
+    function displayApiResult(res, frontend_ms, sourceSize){
+        const boxes = res.boxes || [];
+        if(resultTextBlock){ resultTextBlock.style.display = (boxes.length || res.text) ? 'block' : 'none'; }
+        const interactiveItems = renderTextContent(boxes, res.text);
+        clearOverlay();
+        drawOverlayOnOriginal(boxes, sourceSize || res.image_size || pendingSourceSize);
+        renderRanking(interactiveItems);
+        if(canvas){ canvas.style.display = 'none'; }
         document.getElementById('frontend_ms').textContent = frontend_ms;
         document.getElementById('backend_pre_ms').textContent = res.timings_ms ? res.timings_ms.preprocess : '-';
         document.getElementById('backend_ocr_ms').textContent = res.timings_ms ? res.timings_ms.ocr : '-';
@@ -574,46 +842,229 @@
         document.getElementById('total_ms').textContent = Math.round(total);
     }
 
+    function renderTextContent(boxes, rawText){
+        const textContainer = document.getElementById('resultText');
+        if(!textContainer) return;
+        textContainer.innerHTML = '';
+        const enriched = (boxes || []).map((b, idx)=>({box:b, idx}));
+        const filtered = enriched.filter(item=>{
+            const conf = getNormalizedConf(item.box);
+            return conf !== null && conf >= CONF_THRESHOLD;
+        });
+        // 计算平均置信度
+        if(totalConfEl){
+            if(filtered.length){
+                let sum = 0, count = 0;
+                filtered.forEach(({box:b})=>{
+                    const conf = getNormalizedConf(b);
+                    if(conf !== null){
+                        sum += conf;
+                        count++;
+                    }
+                });
+                if(count){
+                    totalConfEl.textContent = (sum / count).toFixed(2) + '%';
+                }else{
+                    totalConfEl.textContent = '-';
+                }
+            }else{
+                totalConfEl.textContent = '-';
+            }
+        }
+        if(filtered.length){
+            filtered.forEach(({box:b, idx:origIdx})=>{
+                const t = (b.text||'').trim();
+                if(!t) return;
+                const span = document.createElement('span');
+                span.className = 'ocr-word';
+                span.dataset.idx = origIdx;
+                span.style.cursor = 'pointer';
+                span.style.padding = '2px 6px';
+                span.style.margin = '2px';
+                span.style.borderRadius = '6px';
+                span.style.display = 'inline-block';
+                span.style.background = 'rgba(20,33,61,0.05)';
+                span.textContent = t;
+                span.onclick = (ev)=>{ toggleHighlight(origIdx); ev.stopPropagation(); };
+                textContainer.appendChild(span);
+            });
+        }else if(rawText){
+            const pre = document.createElement('pre');
+            pre.style.margin = 0;
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.textContent = rawText;
+            textContainer.appendChild(pre);
+        }else{
+            const empty = document.createElement('div');
+            empty.style.color = '#94a3b8';
+            empty.textContent = '暂无满足置信度阈值的识别文本';
+            textContainer.appendChild(empty);
+        }
+        return filtered;
+    }
+
+    function renderRanking(entries){
+        if(!rankingList) return;
+        rankingList.innerHTML = '';
+        rankingList.dataset.mode = 'single';
+        const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        if(!list.length){
+            const empty = document.createElement('li');
+            empty.className = 'rank-item result-placeholder';
+            const text = document.createElement('div');
+            text.className = 'rank-text';
+            text.innerHTML = '<strong>暂无识别结果</strong>';
+            empty.appendChild(text);
+            rankingList.appendChild(empty);
+            return;
+        }
+        list.sort((a,b)=>{
+            const ca = getNormalizedConf(a.box) ?? 0;
+            const cb = getNormalizedConf(b.box) ?? 0;
+            return cb - ca;
+        });
+        list.forEach((item, idx)=>{
+            const box = item.box;
+            const conf = getNormalizedConf(box) ?? 0;
+            const li = document.createElement('li');
+            li.className = 'rank-item';
+            const rank = document.createElement('span');
+            rank.className = 'rank-no';
+            rank.textContent = String(idx+1).padStart(2,'0');
+            const textWrap = document.createElement('div');
+            textWrap.className = 'rank-text';
+            const title = document.createElement('strong');
+            title.textContent = (box.text || '').trim();
+            const meta = document.createElement('small');
+            meta.textContent = `score: ${conf.toFixed(2)}%`;
+            textWrap.appendChild(title);
+            textWrap.appendChild(meta);
+            const score = document.createElement('span');
+            score.className = 'rank-score';
+            score.textContent = conf.toFixed(2) + '%';
+            li.appendChild(rank);
+            li.appendChild(textWrap);
+            li.appendChild(score);
+            li.onclick = ()=>{ toggleHighlight(item.idx); };
+            rankingList.appendChild(li);
+        });
+    }
+
+    function drawOverlayOnOriginal(boxes, sourceSize){
+        if(!previewOverlay){ return; }
+        commitSourceSize(sourceSize);
+        pendingOverlayBoxes = boxes || [];
+        if(!pendingOverlayBoxes.length){
+            clearOverlay();
+            return;
+        }
+        if(!originalImg || !originalImg.src){
+            clearOverlay();
+            return;
+        }
+        if(originalImg.complete && originalImg.naturalWidth){
+            renderOverlay(pendingOverlayBoxes, originalImg);
+        }else{
+            if(overlayLoadHandlerAttached && originalImg){
+                originalImg.removeEventListener('load', handleOverlayLoad);
+                overlayLoadHandlerAttached = false;
+            }
+            if(originalImg){
+                originalImg.addEventListener('load', handleOverlayLoad, {once:true});
+                overlayLoadHandlerAttached = true;
+            }
+        }
+    }
+
+    function formatScore(boxes){
+        if(!boxes || !boxes.length) return '--';
+        let best = 0;
+        boxes.forEach(box=>{
+            let conf = parseFloat(box.conf || 0);
+            if(isNaN(conf)) conf = 0;
+            if(conf > best) best = conf;
+        });
+        if(best<=1) best = best*100;
+        return best ? best.toFixed(2)+'%' : '--';
+    }
+
     function renderOverlay(boxes, imgEl){
-        const overlay = document.getElementById('overlay');
-        overlay.innerHTML = '';
-        overlay.style.pointerEvents = 'auto';
-        const dispW = imgEl.clientWidth, dispH = imgEl.clientHeight;
-        const naturalW = imgEl.naturalWidth || dispW, naturalH = imgEl.naturalHeight || dispH;
-        const scaleX = dispW / naturalW, scaleY = dispH / naturalH;
-        overlay.style.width = dispW + 'px'; overlay.style.height = dispH + 'px';
-        overlay.style.left = 0; overlay.style.top = 0;
+        if(!previewOverlay) return;
+        previewOverlay.innerHTML = '';
+        if(!boxes || !boxes.length){
+            previewOverlay.style.display='none';
+            currentBoxes = [];
+            return;
+        }
+        if(!imgEl || !imgEl.naturalWidth){
+            setTimeout(()=>renderOverlay(boxes, imgEl), 120);
+            return;
+        }
+        const host = previewOverlay.parentElement;
+        if(!host){
+            clearOverlay();
+            return;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const imgRect = imgEl.getBoundingClientRect();
+        const offsetX = imgRect.left - hostRect.left;
+        const offsetY = imgRect.top - hostRect.top;
+        previewOverlay.style.display = 'block';
+        previewOverlay.style.left = offsetX + 'px';
+        previewOverlay.style.top = offsetY + 'px';
+        previewOverlay.style.right = 'auto';
+        previewOverlay.style.bottom = 'auto';
+        previewOverlay.style.width = imgRect.width + 'px';
+        previewOverlay.style.height = imgRect.height + 'px';
+        const src = (currentSourceSize && currentSourceSize.width && currentSourceSize.height)
+            ? currentSourceSize
+            : {width: imgEl.naturalWidth, height: imgEl.naturalHeight};
+        const scaleX = imgRect.width / src.width;
+        const scaleY = imgRect.height / src.height;
+        currentBoxes = boxes;
         boxes.forEach((b, idx)=>{
             if(!b.text || b.text.trim()==='') return;
+            const conf = getNormalizedConf(b);
+            if(conf === null || conf < 50) return;
+            const left = (parseFloat(b.left) || 0) * scaleX;
+            const top = (parseFloat(b.top) || 0) * scaleY;
+            const width = (parseFloat(b.width) || 0) * scaleX;
+            const height = (parseFloat(b.height) || 0) * scaleY;
             const el = document.createElement('div');
             el.className = 'overlay-box';
             el.dataset.idx = idx;
-            el.style.position = 'absolute';
-            el.style.left = (b.left * scaleX) + 'px';
-            el.style.top = (b.top * scaleY) + 'px';
-            el.style.width = (b.width * scaleX) + 'px';
-            el.style.height = (b.height * scaleY) + 'px';
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+            el.style.width = width + 'px';
+            el.style.height = height + 'px';
             el.style.boxSizing = 'border-box';
-            el.style.border = '2px solid rgba(0,255,0,0.7)';
-            el.style.background = 'transparent';
-            el.style.cursor = 'pointer';
+            el.style.pointerEvents = 'auto';
             el.title = `${b.text} (conf=${b.conf})`;
             el.addEventListener('mouseenter', ()=>{ el.style.border='2px solid rgba(255,0,0,0.85)'; highlightTextSpan(idx, true); });
             el.addEventListener('mouseleave', ()=>{ if(!el.classList.contains('active')) el.style.border='2px solid rgba(0,255,0,0.7)'; highlightTextSpan(idx, false); });
             el.addEventListener('click', (ev)=>{ ev.stopPropagation(); toggleHighlight(idx); });
-            overlay.appendChild(el);
+            previewOverlay.appendChild(el);
         });
     }
 
     function highlightTextSpan(idx, hover){
         const span = document.querySelector(`#resultText .ocr-word[data-idx='${idx}']`);
+        const overlayEl = previewOverlay ? previewOverlay.querySelector(`.overlay-box[data-idx='${idx}']`) : null;
+        const active = overlayEl ? overlayEl.classList.contains('active') : false;
         if(!span) return;
-        if(hover){ span.style.background='rgba(255,230,200,0.9)'; }
-        else { span.style.background=''; }
+        if(hover){
+            if(!active){
+                span.style.background='rgba(255,230,200,0.9)';
+            }
+        }
+        else {
+            span.style.background = active ? 'rgba(255,200,200,0.95)' : '';
+        }
     }
 
     function toggleHighlight(idx){
-        const overlayEl = document.querySelector(`#overlay .overlay-box[data-idx='${idx}']`);
+        if(!previewOverlay) return;
+        const overlayEl = previewOverlay.querySelector(`.overlay-box[data-idx='${idx}']`);
         const span = document.querySelector(`#resultText .ocr-word[data-idx='${idx}']`);
         if(!overlayEl) return;
         const active = overlayEl.classList.toggle('active');
@@ -622,13 +1073,29 @@
     }
 
     // history management (localStorage)
-    function pushHistory(res, file, frontend_ms){
+    function pushHistory(res, file, frontend_ms, previewSrc, sourceSize){
         try{
             const key = 'ocr_history_v1';
             const raw = localStorage.getItem(key);
             const list = raw?JSON.parse(raw):[];
             const thumb = canvas.toDataURL('image/png');
-            const item = {ts:Date.now(), name:file.name, size:file.size, text:res.text, preset:res.preset, lang:res.lang, frontend_ms:frontend_ms, backend:res.timings_ms, thumb, result_img: res.result_img, boxes: res.boxes};
+            const previewImage = previewSrc || (originalImg && originalImg.src) || thumb;
+            const sizeToStore = normalizeSize(sourceSize) || currentSourceSize || pendingSourceSize;
+            const item = {
+                ts:Date.now(),
+                name:file.name,
+                size:file.size,
+                text:res.text,
+                preset:res.preset,
+                lang:res.lang,
+                frontend_ms:frontend_ms,
+                backend:res.timings_ms,
+                thumb,
+                source_size: sizeToStore,
+                preview: previewImage,
+                result_img: res.result_img,
+                boxes: res.boxes
+            };
             list.unshift(item);
             // if trimming required, collect removed items to notify server for cleanup
             const removedFiles = [];
@@ -666,52 +1133,31 @@
             d.title = new Date(it.ts).toLocaleString();
             d.innerHTML = `<img src='${it.thumb}' style='width:100%;height:80px;object-fit:cover;border-radius:4px'/><div style='font-size:12px;margin-top:6px'>${it.name}</div>`;
             d.onclick = ()=>{ // preview historical
-                document.getElementById('frontend_ms').textContent = it.frontend_ms;
+                document.getElementById('frontend_ms').textContent = it.frontend_ms || '-';
                 document.getElementById('backend_pre_ms').textContent = it.backend ? it.backend.preprocess : '-';
                 document.getElementById('backend_ocr_ms').textContent = it.backend ? it.backend.ocr : '-';
-                // show image and overlay if available
-                const resultBlock = document.getElementById('resultBlock');
-                const resultTextBlock = document.getElementById('resultTextBlock');
-                if(it.result_img){
-                    resultBlock.style.display = 'block';
-                    resultTextBlock.style.display = 'block';
-                    const imgEl = document.getElementById('resultStaticImg');
-                    imgEl.src = it.result_img + '?t=' + Date.now();
-                    imgEl.onload = ()=>{ renderOverlay(it.boxes || [], imgEl); };
-                }else{
-                    resultBlock.style.display = 'none';
+                const previewSrc = it.preview || it.result_img || it.thumb;
+                if(originalImg && previewSrc){
+                    clearOverlay();
+                    originalImg.style.display = 'block';
+                    originalImg.src = withCacheBust(previewSrc);
                 }
-                // render text
-                const textContainer = document.getElementById('resultText');
-                if(textContainer){
-                    textContainer.innerHTML = '';
-                    const boxes = it.boxes || [];
-                    if(boxes.length){
-                        boxes.forEach((b, idx)=>{
-                            const t = (b.text||'').trim();
-                            if(!t) return;
-                            const span = document.createElement('span');
-                            span.className = 'ocr-word';
-                            span.dataset.idx = idx;
-                            span.style.cursor = 'pointer';
-                            span.style.padding = '2px 4px';
-                            span.style.margin = '2px';
-                            span.style.borderRadius = '4px';
-                            span.textContent = t;
-                            span.onclick = (ev)=>{ toggleHighlight(idx); ev.stopPropagation(); };
-                            textContainer.appendChild(span);
-                        });
-                    }else{
-                        const pre = document.createElement('pre'); pre.style.margin=0; pre.style.whiteSpace='pre-wrap'; pre.textContent = it.text || '';
-                        textContainer.appendChild(pre);
-                    }
-                }
+                const storedSize = normalizeSize(it.source_size);
+                if(storedSize){ pendingSourceSize = storedSize; }
+                displayApiResult({
+                    boxes: it.boxes || [],
+                    text: it.text || '',
+                    timings_ms: it.backend || {}
+                }, it.frontend_ms || 0, it.source_size);
             };
             container.appendChild(d);
         });
     }
 
     // on load, try to show frontend timings from previous submit
+    renderRanking([]);
+    renderHistory();
+
     window.addEventListener('load', function(){
         const fm = sessionStorage.getItem('frontend_ms');
         const fs = sessionStorage.getItem('frontend_size');
@@ -727,18 +1173,6 @@
         // clear stored frontend_ms to avoid stale values on next visit
         sessionStorage.removeItem('frontend_ms');
         sessionStorage.removeItem('frontend_size');
-        // if server-side rendered result exists, render overlay
-        const imgEl = document.getElementById('resultStaticImg');
-        if(imgEl && imgEl.src){
-            try{
-                const boxesData = imgEl.getAttribute('data-boxes') || '[]';
-                const boxes = JSON.parse(boxesData);
-                if(boxes && boxes.length){
-                    imgEl.onerror = ()=>{ const ov = document.getElementById('overlay'); if(ov) ov.innerHTML=''; console.warn('Processed image failed to load on initial render:', imgEl.src); };
-                    imgEl.onload = ()=>{ errorsEl.style.display='none'; renderOverlay(boxes, imgEl); };
-                }
-            }catch(e){ /* ignore */ }
-        }
     });
 </script>
 

@@ -84,13 +84,17 @@ class ImagePreprocessor:
         if mode == 'none':
             return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-        # 转换为灰度
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # 如果前端已执行灰度与对比度增强（mode == 'client'），则跳过本地 CLAHE
+        # 转换为灰度 + 对比度增强
+        # - 普通模式：在后端执行灰度 + CLAHE
+        # - client 模式：假定前端已完成灰度和对比度增强，这里只保证是单通道灰度，不再做 CLAHE，避免重复处理
         if mode == 'client':
-            enhanced = gray
+            # 输入通常仍是 BGR 图，这里仅做一次灰度转换
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                enhanced = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            else:
+                enhanced = img
         else:
-            # 增强对比度（CLAHE）
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
             enhanced = clahe.apply(gray)
 
