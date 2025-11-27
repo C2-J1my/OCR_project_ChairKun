@@ -1,54 +1,64 @@
 import os
 import time
-from flask import Flask, request, render_template, jsonify
-import pytesseract
-from PIL import Image
-from pytesseract import Output
-import cv2
-import numpy as np
-from werkzeug.utils import secure_filename
-import shutil
-from image_preprocessor import ImagePreprocessor
+import base64
+import io
 import uuid
+import requests
+from flask import Flask, request, render_template, jsonify
+from PIL import Image
+from werkzeug.utils import secure_filename
+from image_preprocessor import ImagePreprocessor
 
 app = Flask(__name__)
 os.makedirs('uploads', exist_ok=True)
+# 云端OCR服务地址（需要配置环境变量 CLOUD_OCR_URL）
+CLOUD_OCR_URL = os.environ.get('CLOUD_OCR_URL', 'http://113.46.128.251:5000/api/remote_ocr')
+# 云端OCR服务健康检查地址（需要配置环境变量 CLOUD_OCR_HEALTH_URL）
+CLOUD_HEALTH_URL = os.environ.get('CLOUD_OCR_HEALTH_URL') or CLOUD_OCR_URL.replace('/api/remote_ocr', '/health')
 
-# 设置Tesseract路径（根据你安装的路径进行修改）
-def _set_tesseract_cmd():
-    # 优先从环境变量获取路径
-    tesseract_path = os.environ.get('TESSERACT_CMD')
-    
-    if tesseract_path and os.path.exists(tesseract_path):
-        pytesseract.pytesseract.tesseract_cmd = tesseract_path
-        # 自动设置 tessdata 路径
-        os.environ.setdefault('TESSDATA_PREFIX', os.path.join(os.path.dirname(tesseract_path), 'tessdata'))
-        return True
-    
-    # 如果环境变量未设置，可以尝试一些常见路径作为备选
-    candidates = [
-        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-        r'D:\Program Files\Tesseract-OCR\tesseract.exe',
-        r'D:\Tesseract-OCR\tesseract.exe',
-    ]
-    
-    for p in candidates:
-        if os.path.exists(p):
-            pytesseract.pytesseract.tesseract_cmd = p
-            os.environ.setdefault('TESSDATA_PREFIX', os.path.join(os.path.dirname(p), 'tessdata'))
-            return True
-            
-    return False
 
-if not _set_tesseract_cmd():
-    raise FileNotFoundError(
-        "无法找到 Tesseract-OCR。\n"
-        "请通过以下方式之一解决：\n"
-        "1. 配置环境变量 TESSERACT_CMD 指向你的 tesseract.exe 文件。\n"
-        "   例如: TESSERACT_CMD=D:\\Tesseract-OCR\\tesseract.exe\n"
-        "2. 或者，在 _set_tesseract_cmd() 函数的 candidates 列表中添加你的安装路径。"
-    )
+def _ensure_pil_image(img_obj):
+    if isinstance(img_obj, Image.Image):
+        return img_obj
+    return Image.fromarray(img_obj)
+
+
+def _call_cloud_ocr(processed_image, lang='chi_sim', preset=None):
+    """将预处理后的图片上传到云端OCR服务"""
+    pil_image = _ensure_pil_image(processed_image)
+    buffer = io.BytesIO()
+    pil_image.save(buffer, format='PNG')
+    buffer.seek(0)
+    files = {'image': ('processed.png', buffer, 'image/png')}
+    data = {'lang': lang}
+    if preset:
+        data['preset'] = preset
+    response = requests.post(CLOUD_OCR_URL, files=files, data=data, timeout=60)
+    response.raise_for_status()
+    return response.json()
+
+
+def _save_overlay_image(overlay_b64: str):
+    if not overlay_b64:
+        return None
+    raw = base64.b64decode(overlay_b64)
+    static_dir = os.path.join(app.root_path, 'static')
+    results_dir = os.path.join(static_dir, 'results')
+    os.makedirs(results_dir, exist_ok=True)
+    unique = f"result_{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}.png"
+    target_path = os.path.join(results_dir, unique)
+    with open(target_path, 'wb') as f:
+        f.write(raw)
+    return f'/static/results/{unique}'
+
+
+def _check_cloud_health():
+    try:
+        resp = requests.get(CLOUD_HEALTH_URL, timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        return {'status': 'error', 'error': str(exc)}
 
 # 首页路由，返回HTML表单
 @app.route('/')
@@ -86,71 +96,22 @@ def ocr():
         client_pre = True if str(client_pre).lower() in ('1','true','yes') else False
         process_mode = 'none' if preset == 'none' else ('client' if client_pre else None)
         processed_image = preprocessor.process(filepath, mode=process_mode)
-
-
-        # # 保存处理后准备识别的图片到 process/result.png
-        # os.makedirs('process', exist_ok=True)
-        # result_path = os.path.join('process', 'result.png')
-        # try:
-        #     processed_image.save(result_path)
-        # except Exception:
-        #     # processed_image 可能不是 PIL.Image（保险起见），尝试转换
-        #     try:
-        #         Image.fromarray(processed_image).save(result_path)
-        #     except Exception:
-                # pass
-
-
         pre_end = time.perf_counter()
-
-        ocr_start = time.perf_counter()
         lang = request.args.get('lang', 'chi_sim')
-        try:
-            text = pytesseract.image_to_string(processed_image, lang=lang, config='--psm 11')
-        except Exception:
-            text = pytesseract.image_to_string(processed_image, lang='eng', config='--psm 6')
-        ocr_end = time.perf_counter()
-
-        # 使用 pytesseract 返回的位置信息绘制绿色矩形框并收集 boxes
-        try:
-            data = pytesseract.image_to_data(processed_image, lang=lang, config='--psm 11', output_type=Output.DICT)
-            # 转为 OpenCV BGR 图像以便绘制
-            cv_img = cv2.cvtColor(np.array(processed_image), cv2.COLOR_RGB2BGR)
-            boxes = []
-            n_boxes = len(data.get('level', []))
-            for i in range(n_boxes):
-                (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-                conf = data.get('conf', [])[i] if 'conf' in data else '-1'
-                txt = data.get('text', [''])[i]
-                try:
-                    c = int(conf)
-                except Exception:
-                    c = -1
-                level = data.get('level', [None])[i]
-                boxes.append({
-                    'text': txt,
-                    'left': int(x), 'top': int(y), 'width': int(w), 'height': int(h),
-                    'conf': conf,
-                    'level': level
-                })
-                # 仅对置信度有效且文本非空的位置画框
-                if c > 30 and txt.strip():
-                    cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            static_dir = os.path.join(app.root_path, 'static')
-            results_dir = os.path.join(static_dir, 'results')
-            os.makedirs(results_dir, exist_ok=True)
-            unique = f"result_{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}.png"
-            result_static_path = os.path.join(results_dir, unique)
-            cv2.imwrite(result_static_path, cv_img)
-            result_url = f'/static/results/{unique}'
-        except Exception:
-            boxes = []
-            result_url = None
+        remote_result = _call_cloud_ocr(processed_image, lang=lang, preset=preset)
+        text = remote_result.get('text', '')
+        boxes = remote_result.get('boxes', [])
+        result_url = _save_overlay_image(remote_result.get('overlay_image'))
+        remote_timings = remote_result.get('timings_ms', {}) or {}
+        cloud_total = remote_timings.get('total')
+        cloud_ocr = remote_timings.get('ocr') or cloud_total
 
         total_end = time.perf_counter()
         timings = {
             'preprocess': round((pre_end - pre_start) * 1000, 1),
-            'ocr': round((ocr_end - ocr_start) * 1000, 1),
+            'ocr': cloud_ocr,
+            'cloud_total': cloud_total,
+            'remote_breakdown': remote_timings,
             'total': round((total_end - start) * 1000, 1),
         }
         return render_template('index.html', text=text, timings=timings, result_img=result_url, boxes=boxes)
@@ -184,76 +145,30 @@ def api_ocr():
     client_pre = True if str(client_pre).lower() in ('1','true','yes') else False
     process_mode = 'none' if preset == 'none' else ('client' if client_pre else None)
     img = preproc.process(path, mode=process_mode)
-
-
-    # # 保存处理后准备识别的图片到 process/result.png
-    # os.makedirs('process', exist_ok=True)
-    # result_path = os.path.join('process', 'result.png')
-    # try:
-    #     img.save(result_path)
-    # except Exception:
-    #     try:
-    #         Image.fromarray(img).save(result_path)
-    #     except Exception:
-    #         pass
-
-
     pre1 = time.perf_counter()
-    ocr0 = time.perf_counter()
-    try:
-        text = pytesseract.image_to_string(img, lang=lang, config='--psm 6')
-    except Exception:
-        text = pytesseract.image_to_string(img, lang='eng', config='--psm 6')
-    ocr1 = time.perf_counter()
-    # 绘制识别框并保存到 static/results/<unique>.png，同时构建 boxes
-    try:
-        data = pytesseract.image_to_data(img, lang=lang, config='--psm 6', output_type=Output.DICT)
-        cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        boxes = []
-        n_boxes = len(data.get('level', []))
-        for i in range(n_boxes):
-            (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-            conf = data.get('conf', [])[i] if 'conf' in data else '-1'
-            txt = data.get('text', [''])[i]
-            try:
-                c = int(conf)
-            except Exception:
-                c = -1
-            level = data.get('level', [None])[i]
-            boxes.append({
-                'text': txt,
-                'left': int(x), 'top': int(y), 'width': int(w), 'height': int(h),
-                'conf': conf,
-                'level': level
-            })
-            if c > 30 and txt.strip():
-                cv2.rectangle(cv_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        static_dir = os.path.join(app.root_path, 'static')
-        results_dir = os.path.join(static_dir, 'results')
-        os.makedirs(results_dir, exist_ok=True)
-        unique = f"result_{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}.png"
-        result_static_path = os.path.join(results_dir, unique)
-        cv2.imwrite(result_static_path, cv_img)
-        result_url = f'/static/results/{unique}'
-    except Exception:
-        boxes = []
-        result_url = None
-    if hasattr(img, 'size'):
+    remote_result = _call_cloud_ocr(img, lang=lang, preset=preset)
+    text = remote_result.get('text', '')
+    boxes = remote_result.get('boxes', [])
+    result_url = _save_overlay_image(remote_result.get('overlay_image'))
+    remote_timings = remote_result.get('timings_ms', {}) or {}
+    cloud_total = remote_timings.get('total')
+    cloud_ocr = remote_timings.get('ocr') or cloud_total
+    image_size = remote_result.get('image_size')
+    if not image_size and hasattr(img, 'size'):
         src_w, src_h = img.size
-    else:
-        shape = getattr(img, 'shape', None)
-        if shape is not None and len(shape) >= 2:
-            src_h, src_w = shape[:2]
-        else:
-            src_w = src_h = None
+        image_size = {"width": src_w, "height": src_h}
+    elif not image_size:
+        image_size = {"width": None, "height": None}
     t1 = time.perf_counter()
     return jsonify({
         "text": text,
         "boxes": boxes,
-        "image_size": {"width": src_w, "height": src_h},
+        "image_size": image_size,
         "timings_ms": {
             "preprocess": round((pre1 - pre0) * 1000, 1),
-            "ocr": round((ocr1 - ocr0) * 1000, 1),
+            "ocr": cloud_ocr,
+            "cloud_total": cloud_total,
+            "remote_breakdown": remote_timings,
             "total": round((t1 - t0) * 1000, 1)
         },
         "lang": lang,
@@ -263,19 +178,10 @@ def api_ocr():
 
 @app.route('/health', methods=['GET'])
 def health():
-    try:
-        ver = str(pytesseract.get_tesseract_version())
-    except Exception:
-        ver = None
-    langs = []
-    try:
-        langs = pytesseract.get_languages(config='')
-    except Exception:
-        langs = []
+    cloud_status = _check_cloud_health()
     return jsonify({
-        "tesseract_version": ver,
-        "languages": langs,
-        "status": "ok" if ver else "error"
+        "preprocess": "ok",
+        "cloud": cloud_status
     })
 
 

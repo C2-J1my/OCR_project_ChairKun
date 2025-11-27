@@ -138,6 +138,7 @@
             box-shadow:0 15px 30px rgba(17,24,39,0.08);
         }
         .error{color:#b00020;background:#ffecec;padding:8px;border-radius:6px;border:1px solid #f5c6cb;margin-top:10px}
+        .hidden-block{display:none !important;}
          .list-card{
              background:linear-gradient(145deg,#f9fbff,#eef2ff);
              color:#0f172a;
@@ -334,22 +335,21 @@
 
     <div id="errors" class="error" style="display:none"></div>
 
-    
-
-    {% if text %}
-        <div class="result">
-            <h2>OCR Result:</h2>
-            <pre style="white-space:pre-wrap;word-wrap:break-word">{{ text }}</pre>
-        </div>
-    {% endif %}
-
     <div class="result">
         <h2>Timings (ms)</h2>
         <div class="timings">
             <div class="tile">前端预处理: <strong id="frontend_ms">-</strong></div>
             <div class="tile">后端预处理: <strong id="backend_pre_ms">{{ timings.preprocess if timings else '-' }}</strong></div>
-            <div class="tile">OCR 识别: <strong id="backend_ocr_ms">{{ timings.ocr if timings else '-' }}</strong></div>
-            <div class="tile">总耗时（前端+后端）: <strong id="total_ms">-</strong></div>
+            <div class="tile">云端识别: <strong id="backend_ocr_ms">{{ timings.ocr if timings else '-' }}</strong>
+                <div id="cloud_detail" style="font-size:12px;color:#6b7280;margin-top:6px">
+                    {% if timings and timings.remote_breakdown %}
+                        云端OCR {{ timings.remote_breakdown.ocr or timings.ocr or timings.cloud_total or '-' }} ms
+                    {% else %}
+                        云端OCR耗时
+                    {% endif %}
+                </div>
+            </div>
+            <div class="tile">总耗时（含网络传输）: <strong id="total_ms">-</strong></div>
         </div>
     </div>
     
@@ -379,7 +379,11 @@
     const errorsEl = document.getElementById('errors');
     const resultTextBlock = document.getElementById('resultTextBlock');
     const totalConfEl = document.getElementById('totalConf');
+    const cloudDetailEl = document.getElementById('cloud_detail');
     const CONF_THRESHOLD = 50;
+    const INITIAL_REMOTE_BREAKDOWN = {% if timings is defined and timings and timings.remote_breakdown %}{{ timings.remote_breakdown | tojson }}{% else %}null{% endif %};
+    const INITIAL_REMOTE_TOTAL = INITIAL_REMOTE_BREAKDOWN ? firstDefined(INITIAL_REMOTE_BREAKDOWN.total, INITIAL_REMOTE_BREAKDOWN.ocr) : null;
+    const INITIAL_SERVER_TOTAL = {% if timings is defined and timings and timings.total %}{{ timings.total }}{% else %}null{% endif %};
 
     let lastFileName = null;
     let batchAbort = false;
@@ -388,6 +392,34 @@
     let pendingSourceSize = {width:null, height:null};
     let pendingOverlayBoxes = [];
     let overlayLoadHandlerAttached = false;
+
+    function toMsNumber(val){
+        const num = Number(val);
+        return Number.isFinite(num) ? num : 0;
+    }
+
+    function firstDefined(){
+        for(let i=0;i<arguments.length;i++){
+            const value = arguments[i];
+            if(value !== undefined && value !== null){
+                return value;
+            }
+        }
+        return null;
+    }
+
+    function updateCloudDetail(remote){
+        if(!cloudDetailEl) return;
+        const ocrVal = remote ? firstDefined(remote.ocr, remote.remote_ocr, remote.total) : null;
+        if(ocrVal !== undefined && ocrVal !== null && ocrVal !== ''){
+            cloudDetailEl.textContent = `云端OCR ${ocrVal} ms`;
+        }else{
+            cloudDetailEl.textContent = '云端OCR耗时';
+        }
+    }
+
+    updateCloudDetail(INITIAL_REMOTE_BREAKDOWN);
+
 
     function clearOverlay(){
         if(!previewOverlay) return;
@@ -628,12 +660,13 @@
                 item.card.style.cursor = 'pointer';
                 item.card.onclick = ()=>{
                     clearOverlay();
-                    if(originalImg && item.thumbSrc){
+                    const previewSrc = res.result_img || item.thumbSrc;
+                    if(originalImg && previewSrc){
                         originalImg.style.display = 'block';
-                        originalImg.src = item.thumbSrc;
+                        originalImg.src = withCacheBust(previewSrc);
                     }
                     const size = normalizeSize(res.image_size || item.sourceSize);
-                    if(size){ pendingSourceSize = size; }
+                    if(size){ pendingSourceSize = size; commitSourceSize(size); }
                     displayApiResult(res, 0, res.image_size || item.sourceSize);
                     window.scrollTo({top:0,behavior:'smooth'});
                 };
@@ -813,10 +846,22 @@
                 if(xhr.status>=200 && xhr.status<300){
                     try{
                         const res = JSON.parse(xhr.responseText);
-                        displayApiResult(res, frontend_ms, res.image_size || pendingSourceSize);
-                        pushHistory(res, file, frontend_ms, originalImg ? originalImg.src : null, res.image_size || pendingSourceSize);
+                        console.log('API响应:', res);
+                        try{
+                            displayApiResult(res, frontend_ms, res.image_size || pendingSourceSize);
+                            pushHistory(res, file, frontend_ms, originalImg ? originalImg.src : null, res.image_size || pendingSourceSize);
+                        }catch(displayErr){
+                            console.error('显示结果时出错:', displayErr);
+                            errorsEl.textContent = '显示结果时出错: ' + displayErr.message;
+                            errorsEl.style.display='block';
+                        }
                         resolve(res);
-                    }catch(err){ errorsEl.textContent='解析服务器响应失败'; errorsEl.style.display='block'; reject(err); }
+                    }catch(err){
+                        console.error('解析响应失败:', err);
+                        errorsEl.textContent='解析服务器响应失败: ' + err.message;
+                        errorsEl.style.display='block';
+                        reject(err);
+                    }
                 }else{
                     errorsEl.textContent = `服务器返回错误 ${xhr.status}`;
                     errorsEl.style.display='block';
@@ -829,17 +874,65 @@
 
     function displayApiResult(res, frontend_ms, sourceSize){
         const boxes = res.boxes || [];
-        if(resultTextBlock){ resultTextBlock.style.display = (boxes.length || res.text) ? 'block' : 'none'; }
+        const hasText = res.text && res.text.trim().length > 0;
+        const hasBoxes = boxes.length > 0;
+        // 只要有文本或识别框，就显示结果区域
+        if(resultTextBlock){ 
+            resultTextBlock.style.display = (hasBoxes || hasText) ? 'block' : 'none'; 
+        }
         const interactiveItems = renderTextContent(boxes, res.text);
         clearOverlay();
+        
+        // 更新图片预览 - 优先使用服务器返回的结果图，否则保持当前预览图
+        if(originalImg){
+            let imageSrc = null;
+            if(res.result_img){
+                imageSrc = withCacheBust(res.result_img);
+                originalImg.src = imageSrc;
+                originalImg.style.display = 'block';
+                console.log('使用服务器返回的图片:', imageSrc);
+            }else if(originalImg.src && originalImg.src !== ''){
+                // 保持当前图片显示
+                originalImg.style.display = 'block';
+                console.log('保持当前预览图片:', originalImg.src.substring(0, 50) + '...');
+            }else{
+                console.warn('没有可用的图片源');
+            }
+            // 确保图片加载错误时也能显示
+            originalImg.onerror = function(){
+                console.warn('图片加载失败:', originalImg.src);
+                // 如果result_img加载失败，尝试使用原始预览（如果有的话）
+                if(res.result_img && originalImg.src !== originalImg.dataset.fallbackSrc){
+                    // 已经尝试过result_img，不再重试
+                }
+            };
+            // 图片加载成功
+            originalImg.onload = function(){
+                console.log('图片加载成功');
+            };
+        }else{
+            console.warn('originalImg 元素不存在');
+        }
+        
         drawOverlayOnOriginal(boxes, sourceSize || res.image_size || pendingSourceSize);
         renderRanking(interactiveItems);
         if(canvas){ canvas.style.display = 'none'; }
+        const remoteBreakdown = res.timings_ms ? (res.timings_ms.remote_breakdown || null) : null;
+        const backendPreVal = res.timings_ms ? res.timings_ms.preprocess : '-';
+        let backendOcrVal = '-';
+        if(remoteBreakdown){
+            backendOcrVal = firstDefined(remoteBreakdown.ocr, remoteBreakdown.remote_ocr, remoteBreakdown.total, '-');
+        }else if(res.timings_ms){
+            backendOcrVal = firstDefined(res.timings_ms.ocr, res.timings_ms.cloud_total, res.timings_ms.total, '-');
+        }
         document.getElementById('frontend_ms').textContent = frontend_ms;
-        document.getElementById('backend_pre_ms').textContent = res.timings_ms ? res.timings_ms.preprocess : '-';
-        document.getElementById('backend_ocr_ms').textContent = res.timings_ms ? res.timings_ms.ocr : '-';
-        const total = (Number(frontend_ms||0) + Number(res.timings_ms?.preprocess||0) + Number(res.timings_ms?.ocr||0));
+        document.getElementById('backend_pre_ms').textContent = backendPreVal;
+        document.getElementById('backend_ocr_ms').textContent = backendOcrVal;
+        // 总耗时 = 前端预处理 + 服务器总耗时（包括后端预处理、网络传输、云端处理）
+        const serverTotal = res.timings_ms ? (res.timings_ms.total || 0) : 0;
+        const total = toMsNumber(frontend_ms) + toMsNumber(serverTotal);
         document.getElementById('total_ms').textContent = Math.round(total);
+        updateCloudDetail(remoteBreakdown);
     }
 
     function renderTextContent(boxes, rawText){
@@ -1078,23 +1171,33 @@
             const key = 'ocr_history_v1';
             const raw = localStorage.getItem(key);
             const list = raw?JSON.parse(raw):[];
-            const thumb = canvas.toDataURL('image/png');
-            const previewImage = previewSrc || (originalImg && originalImg.src) || thumb;
+            let thumb = '';
+            try{
+                if(canvas && canvas.width > 0 && canvas.height > 0){
+                    thumb = canvas.toDataURL('image/png');
+                }
+            }catch(e){
+                console.warn('无法生成canvas缩略图', e);
+            }
+            if(!thumb && originalImg && originalImg.src && !originalImg.src.startsWith('data:')){
+                thumb = originalImg.src;
+            }
+            const previewImage = res.result_img || previewSrc || (originalImg && originalImg.src) || thumb;
             const sizeToStore = normalizeSize(sourceSize) || currentSourceSize || pendingSourceSize;
             const item = {
                 ts:Date.now(),
                 name:file.name,
                 size:file.size,
-                text:res.text,
+                text:res.text || '',
                 preset:res.preset,
                 lang:res.lang,
                 frontend_ms:frontend_ms,
                 backend:res.timings_ms,
-                thumb,
+                thumb: thumb || previewImage,
                 source_size: sizeToStore,
                 preview: previewImage,
                 result_img: res.result_img,
-                boxes: res.boxes
+                boxes: res.boxes || []
             };
             list.unshift(item);
             // if trimming required, collect removed items to notify server for cleanup
@@ -1133,9 +1236,6 @@
             d.title = new Date(it.ts).toLocaleString();
             d.innerHTML = `<img src='${it.thumb}' style='width:100%;height:80px;object-fit:cover;border-radius:4px'/><div style='font-size:12px;margin-top:6px'>${it.name}</div>`;
             d.onclick = ()=>{ // preview historical
-                document.getElementById('frontend_ms').textContent = it.frontend_ms || '-';
-                document.getElementById('backend_pre_ms').textContent = it.backend ? it.backend.preprocess : '-';
-                document.getElementById('backend_ocr_ms').textContent = it.backend ? it.backend.ocr : '-';
                 const previewSrc = it.preview || it.result_img || it.thumb;
                 if(originalImg && previewSrc){
                     clearOverlay();
@@ -1143,12 +1243,15 @@
                     originalImg.src = withCacheBust(previewSrc);
                 }
                 const storedSize = normalizeSize(it.source_size);
-                if(storedSize){ pendingSourceSize = storedSize; }
-                displayApiResult({
+                if(storedSize){ pendingSourceSize = storedSize; commitSourceSize(storedSize); }
+                const payload = {
                     boxes: it.boxes || [],
                     text: it.text || '',
+                    result_img: it.result_img || previewSrc,
+                    image_size: it.source_size,
                     timings_ms: it.backend || {}
-                }, it.frontend_ms || 0, it.source_size);
+                };
+                displayApiResult(payload, it.frontend_ms || 0, it.source_size);
             };
             container.appendChild(d);
         });
@@ -1164,12 +1267,19 @@
         if(fm!==null){ document.getElementById('frontend_ms').textContent = fm; }
         if(fs!==null){ document.getElementById('feSize').textContent = fs; }
         // compute total if backend timings exist
-        const backend_pre = parseFloat(document.getElementById('backend_pre_ms').textContent || 0) || 0;
-        const backend_ocr = parseFloat(document.getElementById('backend_ocr_ms').textContent || 0) || 0;
-        const frontend = parseFloat(fm||0);
-        if(!isNaN(frontend)){
-            document.getElementById('total_ms').textContent = Math.round(frontend + backend_pre + backend_ocr);
-        }
+        const frontend = toMsNumber(fm || 0);
+        // 总耗时 = 前端预处理 + 服务器总耗时（包括后端预处理、网络传输、云端处理）
+        const serverTotal = INITIAL_SERVER_TOTAL !== null && INITIAL_SERVER_TOTAL !== undefined 
+            ? INITIAL_SERVER_TOTAL 
+            : (function(){
+                // 如果没有服务器总耗时，尝试从后端预处理和云端OCR计算（不包含网络传输）
+                const backend_pre = toMsNumber(document.getElementById('backend_pre_ms').textContent || 0);
+                const backend_ocr_elem = document.getElementById('backend_ocr_ms');
+                const backend_ocr_text = backend_ocr_elem ? backend_ocr_elem.textContent : '0';
+                const backend_ocr = toMsNumber(backend_ocr_text || 0);
+                return backend_pre + backend_ocr;
+            })();
+        document.getElementById('total_ms').textContent = Math.round(frontend + toMsNumber(serverTotal));
         // clear stored frontend_ms to avoid stale values on next visit
         sessionStorage.removeItem('frontend_ms');
         sessionStorage.removeItem('frontend_size');
